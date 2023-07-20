@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+
+<Problem>
+  <Solvers>
+    <CompositionalMultiphaseFVM
+      name="compflow"
+      logLevel="1"
+      discretization="fluidTPFA"
+      temperature="368.15"
+      useMass="1"
+      targetRegions="{ region }">
+      <NonlinearSolverParameters
+        newtonTol="1.0e-5"
+        newtonMaxIter="100"
+        maxTimeStepCuts="5"
+        lineSearchAction="None"/>
+      <LinearSolverParameters
+        directParallel="0"/>
+    </CompositionalMultiphaseFVM>
+  </Solvers>
+
+  <Mesh>
+    <InternalMesh
+      name="mesh1"
+      elementTypes="{ C3D8 }"
+      xCoords="{ 0, 30 }"
+      yCoords="{ 0, 30 }"
+      zCoords="{ 0, 30 }"
+      nx="{ 10 }"
+      ny="{ 10 }"
+      nz="{ 10 }"
+      cellBlockNames="{ cellBlock }"/>
+  </Mesh>
+</Problem>
