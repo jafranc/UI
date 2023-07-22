@@ -16,7 +16,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QPushButton,
                              QComboBox,
                              QCheckBox,
-                             QSlider)
+                             QTreeWidgetItem,
+                             QSlider, QTreeWidget, QGridLayout)
 
 from PyQt5 import QtQuick
 import xml.etree.ElementTree as ET
@@ -63,19 +64,45 @@ class MainWindow(QMainWindow):
         self.itree = ET.parse('test.xml')
         # self.tree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
+        nb_elt = len(self.itree.getroot().findall(".//*"))
 
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
-        self.mlayout = QVBoxLayout()
+        self.vlayout = QGridLayout()
+        self.treewidget = QTreeWidget()
+        self.vlayout.addWidget(self.treewidget,0,0)
 
         suffix = '\t'
-        for child in self.itree.iter():
+
+        visit = [self.itree.getroot()]
+        visit_item = [QTreeWidgetItem(self.treewidget)]
+        visit_item[0].setText(0,visit[0].tag)
+        # visit_item[0].setText(0,"Test")
+        # seconditem = QTreeWidgetItem(visit_item[0])
+        # seconditem.setText(0,"Subtest")
+
+        # for child in self.itree.iter():
+        i = 0
+        gen_num = [0]
+        while len(visit):
+            child = visit.pop(0)
+            childit = visit_item.pop(0)
+            gen = gen_num.pop(0)
+            visit += list(child)
+            visit_item += [ QTreeWidgetItem(childit) for i in range(len(list(child)))]
+            gen_num += len(list(child))*[gen+1]
+            # [print(item.tag) for item in visit]
+            # print('-----\n')
+
             frame = QFrame()
             frame.setLineWidth(2)
             frame.setFrameStyle(QFrame.Panel | QFrame.Plain)
             layout = QFormLayout()
             layout.addRow(QLabel(suffix + child.tag))
+
+            childit.setText(0, child.tag)
+            print(gen,child.tag)
 
             for k, v in child.attrib.items():
                 if re.match(r'logLevel', k):
@@ -100,14 +127,16 @@ class MainWindow(QMainWindow):
                     layout.addRow(k, QLineEdit(v))
 
             frame.setLayout(layout)
-            self.mlayout.addWidget(frame)
+            self.vlayout.addWidget(frame,i,gen+1)
+            i += 1
+
 
         self.button = QPushButton("Save as...")
         self.button.clicked.connect(self.file_save)
 
-        self.mlayout.addWidget(self.button)
+        self.vlayout.addWidget(self.button)
         container = QWidget()
-        container.setLayout(self.mlayout)
+        container.setLayout(self.vlayout)
         self.setCentralWidget(container)
 
     def file_save(self):
@@ -120,11 +149,11 @@ class MainWindow(QMainWindow):
         # f.close()
 
     def gen_txt(self, fname):
-        index = self.mlayout.count()
+        index = self.vlayout.count()
         print(index)
         problem = None
         for i in range(0, index - 1):  # last widget is a button
-            qform = self.mlayout.itemAt(i).widget().layout()
+            qform = self.vlayout.itemAt(i).widget().layout()
             c = qform.rowCount()
             for j in range(0, c):
                 # ql = qform.itemAt(j,QFormLayout.LabelRole).widget()
