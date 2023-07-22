@@ -2,6 +2,7 @@
 # from PyQt5.QtQml import QQmlApplicationEngine
 import re
 from functools import partial
+import numpy as np
 
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
@@ -9,6 +10,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QLineEdit,
                              QVBoxLayout,
                              QHBoxLayout,
+                             QGridLayout,
                              QWidget,
                              QFormLayout,
                              QFrame,
@@ -60,16 +62,25 @@ class MainWindow(QMainWindow):
 
         self.labellist = {}
         self.setWindowTitle("My App")
-        self.itree = ET.parse('test.xml')
-        # self.tree = ET.parse('deadoil_3ph_corey_1d.xml')
+        # self.itree = ET.parse('test.xml')
+        self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
+
+        #find size of grid layout
+        nb_elt = len(self.itree.getroot().findall(".//*"))
+        nbx = int(np.sqrt(nb_elt))
+        nby = nb_elt - nbx
+
+
         self.otree = ET.ElementTree()
 
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
-        self.mlayout = QVBoxLayout()
+        # self.mlayout = QVBoxLayout()
+        self.mlayout = QGridLayout()
 
         suffix = '\t'
+        i = 0
         for child in self.itree.iter():
             frame = QFrame()
             frame.setLineWidth(2)
@@ -100,7 +111,8 @@ class MainWindow(QMainWindow):
                     layout.addRow(k, QLineEdit(v))
 
             frame.setLayout(layout)
-            self.mlayout.addWidget(frame)
+            self.mlayout.addWidget(frame,int(i/nbx),i%nbx)
+            i = i + 1
 
         self.button = QPushButton("Save as...")
         self.button.clicked.connect(self.file_save)
