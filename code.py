@@ -22,12 +22,15 @@ from PyQt5.QtWidgets import (QApplication,
 from PyQt5 import QtQuick
 import xml.etree.ElementTree as ET
 import sys
+
+
 def iter_indent(elt: ET.Element):
     for child in elt:
         child.text += '\t'
         iter_indent(child)
         child.tail += '\t'
     elt.text += '\t'
+
 
 def indent(tree: ET.ElementTree):
     # init indent
@@ -62,7 +65,7 @@ class MainWindow(QMainWindow):
         self.labellist = {}
         self.setWindowTitle("My App")
         self.itree = ET.parse('test.xml')
-        # self.tree = ET.parse('deadoil_3ph_corey_1d.xml')
+        # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
         nb_elt = len(self.itree.getroot().findall(".//*"))
 
@@ -71,29 +74,36 @@ class MainWindow(QMainWindow):
 
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
-        self.vlayout.addWidget(self.treewidget,0,0)
+        self.treewidget.clicked.connect(self.activate_button)
+        self.vlayout.addWidget(self.treewidget, 0, 0)
 
         suffix = '\t'
 
         visit = [self.itree.getroot()]
         visit_item = [QTreeWidgetItem(self.treewidget)]
-        visit_item[0].setText(0,visit[0].tag)
+        visit_item[0].setText(0, visit[0].tag)
         # visit_item[0].setText(0,"Test")
         # seconditem = QTreeWidgetItem(visit_item[0])
         # seconditem.setText(0,"Subtest")
 
         # for child in self.itree.iter():
-        i = 0
         gen_num = [0]
+        col_num = [0]
         while len(visit):
             child = visit.pop(0)
             childit = visit_item.pop(0)
+            # col = ((col+1) if gen==old_gen else col) % 3
             gen = gen_num.pop(0)
+            col = col_num.pop(0)
             visit += list(child)
-            visit_item += [ QTreeWidgetItem(childit) for i in range(len(list(child)))]
-            gen_num += len(list(child))*[gen+1]
-            # [print(item.tag) for item in visit]
-            # print('-----\n')
+            visit_item += [QTreeWidgetItem(childit) for i in range(len(list(child)))]
+            gen_num += len(list(child)) * [gen + 1]
+            if child.tag == "Problem":
+                col_num += range(0, len(list(child)))
+            else:
+                col_num += len(list(child)) * [col]
+
+            print(range(col, col + len(list(child))))
 
             frame = QFrame()
             frame.setLineWidth(2)
@@ -102,7 +112,7 @@ class MainWindow(QMainWindow):
             layout.addRow(QLabel(suffix + child.tag))
 
             childit.setText(0, child.tag)
-            print(gen,child.tag)
+            print(gen, child.tag)
 
             for k, v in child.attrib.items():
                 if re.match(r'logLevel', k):
@@ -127,17 +137,25 @@ class MainWindow(QMainWindow):
                     layout.addRow(k, QLineEdit(v))
 
             frame.setLayout(layout)
-            self.vlayout.addWidget(frame,i,gen+1)
-            i += 1
+
+            if self.vlayout.itemAtPosition(gen+1,col+1) is None :
+                self.vlayout.addWidget(frame, gen + 1, col + 1)
+            else:
+                self.vlayout.addWidget(frame, gen + 2, col + 1)
 
 
         self.button = QPushButton("Save as...")
         self.button.clicked.connect(self.file_save)
 
+        self.button.hide()
+
         self.vlayout.addWidget(self.button)
         container = QWidget()
         container.setLayout(self.vlayout)
         self.setCentralWidget(container)
+
+    def activate_button(self):
+        self.button.show()
 
     def file_save(self):
         name = QFileDialog.getSaveFileName(self, 'Save File')
@@ -160,7 +178,7 @@ class MainWindow(QMainWindow):
                 qw = qform.itemAt(j, QFormLayout.FieldRole)
                 ql = qform.itemAt(j, QFormLayout.LabelRole)
                 if ql is None:
-                    if problem is None :
+                    if problem is None:
                         problem = ET.Element(qw.widget().text())
                     else:
                         last_elem = ET.Element(qw.widget().text())
@@ -177,7 +195,6 @@ class MainWindow(QMainWindow):
                         right = str(qw.widget().currentIndex())
 
                     last_elem.set(ql.widget().text(), right)
-
 
         otree = ET.ElementTree()
         otree._setroot(problem)
