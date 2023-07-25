@@ -62,7 +62,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.labellist = {}
+        # self.labellist = {}
+        self.showlist = []
         self.setWindowTitle("My App")
         self.itree = ET.parse('test.xml')
         # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
@@ -76,6 +77,8 @@ class MainWindow(QMainWindow):
         self.treewidget = QTreeWidget()
         self.treewidget.clicked.connect(self.activate_button)
         self.vlayout.addWidget(self.treewidget, 0, 0)
+
+        self.qwidgetlist = {}
 
         suffix = '\t'
 
@@ -106,12 +109,14 @@ class MainWindow(QMainWindow):
             print(range(col, col + len(list(child))))
 
             frame = QFrame()
+            self.qwidgetlist[child.tag] = frame
             frame.setLineWidth(2)
             frame.setFrameStyle(QFrame.Panel | QFrame.Plain)
             layout = QFormLayout()
             layout.addRow(QLabel(suffix + child.tag))
 
             childit.setText(0, child.tag)
+            self.showlist.append(childit)
             print(gen, child.tag)
 
             for k, v in child.attrib.items():
@@ -147,7 +152,7 @@ class MainWindow(QMainWindow):
         self.button = QPushButton("Save as...")
         self.button.clicked.connect(self.file_save)
 
-        self.button.hide()
+        # self.button.hide()
 
         self.vlayout.addWidget(self.button)
         container = QWidget()
@@ -155,7 +160,21 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
     def activate_button(self):
-        self.button.show()
+        # self.button.show()
+        print( [tt.text(0) for tt in self.showlist])
+        for w in self.showlist:
+            self.qwidgetlist[w.text(0)].hide()
+
+        self.showlist = self.treewidget.selectedItems()
+        added_list = []
+        #show all children too
+        for w in self.showlist:
+            for ic in range(0,w.childCount()):
+                added_list.append(w.child(ic))
+        self.showlist.extend(added_list)
+
+        for w in self.showlist:
+            self.qwidgetlist[w.text(0)].show()
 
     def file_save(self):
         name = QFileDialog.getSaveFileName(self, 'Save File')
