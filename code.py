@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QComboBox,
                              QCheckBox,
                              QTreeWidgetItem,
-                             QSlider, QTreeWidget, QGridLayout)
+                             QSlider, QTreeWidget, QGridLayout, QAbstractItemView)
 
 from PyQt5 import QtQuick
 import xml.etree.ElementTree as ET
@@ -64,7 +64,7 @@ class MainWindow(QMainWindow):
 
         # self.labellist = {}
         self.showlist = []
-        self.setWindowTitle("My App")
+        self.setWindowTitle("GEOS standard UI")
         self.itree = ET.parse('test.xml')
         # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
@@ -75,7 +75,8 @@ class MainWindow(QMainWindow):
 
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
-        self.treewidget.clicked.connect(self.activate_button)
+        self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.treewidget.itemActivated.connect(self.activate_button)
         self.vlayout.addWidget(self.treewidget, 0, 0)
 
         self.qwidgetlist = {}
@@ -116,6 +117,7 @@ class MainWindow(QMainWindow):
             layout.addRow(QLabel(suffix + child.tag))
 
             childit.setText(0, child.tag)
+            childit.setExpanded(True)
             self.showlist.append(childit)
             print(gen, child.tag)
 
@@ -166,15 +168,19 @@ class MainWindow(QMainWindow):
             self.qwidgetlist[w.text(0)].hide()
 
         self.showlist = self.treewidget.selectedItems()
-        added_list = []
-        #show all children too
-        for w in self.showlist:
-            for ic in range(0,w.childCount()):
-                added_list.append(w.child(ic))
-        self.showlist.extend(added_list)
+        self.appendAllChildren(self.showlist)
+
 
         for w in self.showlist:
             self.qwidgetlist[w.text(0)].show()
+
+    def appendAllChildren(self,list):
+        #show all children too
+        for w in list:
+            sublist = [w.child(ic) for ic in range(0,w.childCount())]
+            self.appendAllChildren(sublist)
+            self.showlist.extend(sublist)
+
 
     def file_save(self):
         name = QFileDialog.getSaveFileName(self, 'Save File')
