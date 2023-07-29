@@ -16,17 +16,21 @@ from PyQt5.QtWidgets import (QApplication,
                              QPushButton,
                              QComboBox,
                              QCheckBox,
-                             QSlider)
+                             QTreeWidgetItem,
+                             QSlider, QTreeWidget, QGridLayout, QAbstractItemView)
 
 from PyQt5 import QtQuick
 import xml.etree.ElementTree as ET
 import sys
+
+
 def iter_indent(elt: ET.Element):
     for child in elt:
         child.text += '\t'
         iter_indent(child)
         child.tail += '\t'
     elt.text += '\t'
+
 
 def indent(tree: ET.ElementTree):
     # init indent
@@ -58,31 +62,78 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.labellist = {}
-        self.setWindowTitle("My App")
+        # self.labellist = {}
+        self.showlist = []
+        self.qwidgetlist = {}
+        self.qtreeitemlist = {}
+        self.tagHashMap = {}
+        self.setWindowTitle("GEOS standard UI")
         self.itree = ET.parse('test.xml')
-        # self.tree = ET.parse('deadoil_3ph_corey_1d.xml')
+        # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
+        nb_elt = len(self.itree.getroot().findall(".//*"))
 
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
-        self.mlayout = QVBoxLayout()
+        self.vlayout = QGridLayout()
+        self.treewidget = QTreeWidget()
+        self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.treewidget.itemActivated.connect(self.activate_button)
+
+
 
         suffix = '\t'
-        for child in self.itree.iter():
+
+        visit = [self.itree.getroot()]
+        visit_item = [QTreeWidgetItem(self.treewidget)]
+        visit_item[0].setText(0, visit[0].tag)
+        # visit_item[0].setText(0,"Test")
+        # seconditem = QTreeWidgetItem(visit_item[0])
+        # seconditem.setText(0,"Subtest")
+
+        # for child in self.itree.iter():
+        gen_num = [0]
+        col_num = [0]
+        max_gen = 0
+        while len(visit):
+            child = visit.pop(0)
+            childit = visit_item.pop(0)
+            # col = ((col+1) if gen==old_gen else col) % 3
+            gen = gen_num.pop(0)
+            max_gen = gen if gen > max_gen else max_gen
+            col = col_num.pop(0)
+            visit += list(child)
+            visit_item += [QTreeWidgetItem(childit) for i in range(len(list(child)))]
+            gen_num += len(list(child)) * [gen + 1]
+            if child.tag == "Problem":
+                col_num += range(0, len(list(child)))
+            else:
+                col_num += len(list(child)) * [col]
+
+            print(range(col, col + len(list(child))))
+
             frame = QFrame()
+            h = self.append_in_dict(child, frame)
+
             frame.setLineWidth(2)
             frame.setFrameStyle(QFrame.Panel | QFrame.Plain)
             layout = QFormLayout()
             layout.addRow(QLabel(suffix + child.tag))
+
+            childit.setText(0, child.tag)
+            childit.setExpanded(True)
+            self.showlist.append(h)
+            self.qtreeitemlist[h] = childit
+            print(gen, child.tag)
 
             for k, v in child.attrib.items():
                 if re.match(r'logLevel', k):
                     qc = QComboBox()
                     qc.addItems([str(i) for i in range(0, 8)])
                     layout.addRow(k, qc)
-                elif re.match(r'newton?', k):
+                elif re.match(r'(max|begin|end)Time$', k) or re.match(r'(force|initial)Dt', k) \
+                        or re.match(r'timeFrequency', k):
                     ql = QHBoxLayout()
                     qe = QLineEdit(v)
                     ql.addWidget(qe)
@@ -92,7 +143,7 @@ class MainWindow(QMainWindow):
                     qc.currentIndexChanged.connect(partial(self.on_currentIndexChanged, k, qe))
                     ql.addWidget(qc)
                     layout.addRow(k, ql)
-                elif re.match(r'useMass|directParallel', k):
+                elif re.match(r'useMass|directParallel|targetExactTimestep', k):
                     qcb = QCheckBox()
                     qcb.setChecked(bool(int(v)))
                     layout.addRow(k, qcb)
@@ -100,15 +151,58 @@ class MainWindow(QMainWindow):
                     layout.addRow(k, QLineEdit(v))
 
             frame.setLayout(layout)
-            self.mlayout.addWidget(frame)
+
+            max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
 
         self.button = QPushButton("Save as...")
         self.button.clicked.connect(self.file_save)
 
-        self.mlayout.addWidget(self.button)
+        # self.button.hide()
+
+        self.vlayout.addWidget(self.treewidget, 0, 0, max_gen, 1)
+        self.vlayout.addWidget(self.button, max_gen + 1, 0)
         container = QWidget()
-        container.setLayout(self.mlayout)
+        container.setLayout(self.vlayout)
         self.setCentralWidget(container)
+
+    def append_in_dict(self, child, frame, c = 0):
+        h = hash(child.tag + str(c))
+        if not h in self.qwidgetlist:
+            self.tagHashMap[h] = child.tag
+            self.qwidgetlist[h] = frame
+            print('c=',c)
+        else:
+            h = self.append_in_dict(child, frame, c+1 )
+        return h
+
+    def test_if_widget_present(self, col, frame, gen, max_gen):
+        if self.vlayout.itemAtPosition(gen + 1, col + 1) is None:
+            self.vlayout.addWidget(frame, gen + 1, col + 1)
+        else:
+            max_gen = self.test_if_widget_present(col, frame, gen + 1, max_gen + 1)
+        return max_gen
+
+    def activate_button(self):
+        # self.button.show()
+        print('before')
+        print([ self.tagHashMap[h] for h in self.showlist])
+        # self.appendAllChildren(self.showlist)
+        for h in self.showlist:
+            self.qwidgetlist[h].hide()
+        self.showlist = []
+
+        self.showlist = [ h for item in self.treewidget.selectedItems() for h,v in self.qtreeitemlist.items() if v==item ]
+        # self.appendAllChildren(self.showlist)
+
+        for h in self.showlist:
+            self.qwidgetlist[h].show()
+
+    # def appendAllChildren(self, list):
+    #     # show all children too
+    #     for w in list:
+    #         sublist = [ w[1].child(ic) for ic in range(0, w[1].childCount())]
+    #         self.appendAllChildren(sublist)
+    #         list.extend(sublist)
 
     def file_save(self):
         name = QFileDialog.getSaveFileName(self, 'Save File')
@@ -120,18 +214,18 @@ class MainWindow(QMainWindow):
         # f.close()
 
     def gen_txt(self, fname):
-        index = self.mlayout.count()
+        index = self.vlayout.count()
         print(index)
         problem = None
         for i in range(0, index - 1):  # last widget is a button
-            qform = self.mlayout.itemAt(i).widget().layout()
+            qform = self.vlayout.itemAt(i).widget().layout()
             c = qform.rowCount()
             for j in range(0, c):
                 # ql = qform.itemAt(j,QFormLayout.LabelRole).widget()
                 qw = qform.itemAt(j, QFormLayout.FieldRole)
                 ql = qform.itemAt(j, QFormLayout.LabelRole)
                 if ql is None:
-                    if problem is None :
+                    if problem is None:
                         problem = ET.Element(qw.widget().text())
                     else:
                         last_elem = ET.Element(qw.widget().text())
@@ -148,7 +242,6 @@ class MainWindow(QMainWindow):
                         right = str(qw.widget().currentIndex())
 
                     last_elem.set(ql.widget().text(), right)
-
 
         otree = ET.ElementTree()
         otree._setroot(problem)

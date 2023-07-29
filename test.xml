@@ -31,4 +31,32 @@
       nz="{ 10 }"
       cellBlockNames="{ cellBlock }"/>
   </Mesh>
+
+  <Events
+          maxTime="2e7">
+    <PeriodicEvent
+            name="outputs"
+            timeFrequency="1e6"
+            target="/Outputs/siloOutput"/>
+
+    <PeriodicEvent
+            name="solverApplications1"
+            forceDt="1e4"
+            endTime="1e5"
+            target="/Solvers/compflow"/>
+
+    <PeriodicEvent
+            name="solverApplications2"
+            forceDt="1e5"
+            beginTime="1e5"
+            target="/Solvers/compflow"/>
+
+    <PeriodicEvent
+            name="restarts"
+            timeFrequency="1e7"
+            targetExactTimestep="0"
+            target="/Outputs/restartOutput"/>
+  </Events>
+
+
 </Problem>
