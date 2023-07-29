@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
 
         # self.button.hide()
 
-        self.vlayout.addWidget(self.button)
+        self.vlayout.addWidget(self.button,1,0)
         container = QWidget()
         container.setLayout(self.vlayout)
         self.setCentralWidget(container)
