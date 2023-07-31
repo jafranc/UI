@@ -26,6 +26,18 @@ import xml.etree.ElementTree as ET
 import sys
 
 
+def stringify(mdict: dict):
+    rdict = {}
+    for key in mdict:
+        if isinstance(mdict[key], list):
+            type_check = [isinstance(item, str) for item in mdict[key]]
+            if all(type_check):
+                mdict[key] = '[' + ','.join(mdict[key]) + ']'
+        rdict[str(key)] = re.sub(r'\[', '{ ', str(mdict[key]))
+        rdict[str(key)] = re.sub(r'\]', ' }', rdict[str(key)])
+    return rdict
+
+
 def iter_indent(elt: ET.Element):
     for child in elt:
         child.text += '\t'
@@ -72,9 +84,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("GEOS standard UI")
         self.sc = xmlschema.XMLSchema('schema.xsd')
         self.fname = 'test.xml'
-        # self.sc_tree = self.sc.to_etree(self.fname)
-        pprint( self.sc.to_etree(self.fname) )
+        self.sc_tree = ET.ElementTree()
+        self.sc_tree._setroot( ET.Element( "Problem", stringify(self.sc.to_dict(self.fname)) ) )
+        # pprint( self.sc.to_etree(self.fname) )
         self.itree = ET.parse(self.fname)
+        print(xmlschema.etree_tostring(self.sc_tree.getroot()))
         # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
         nb_elt = len(self.itree.getroot().findall(".//*"))
@@ -84,6 +98,7 @@ class MainWindow(QMainWindow):
 
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
+        self.treewidget.setHeaderLabel('Object Tree')
         self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.treewidget.itemActivated.connect(self.activate_button)
 
@@ -176,7 +191,6 @@ class MainWindow(QMainWindow):
         if not h in self.qwidgetlist:
             self.tagHashMap[h] = child.tag
             self.qwidgetlist[h] = frame
-            print('c=',c)
         else:
             h = self.append_in_dict(child, frame, c+1 )
         return h
