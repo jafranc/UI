@@ -2,6 +2,7 @@
 # from PyQt5.QtQml import QQmlApplicationEngine
 import re
 from functools import partial
+from pprint import pprint
 
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
@@ -20,6 +21,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QSlider, QTreeWidget, QGridLayout, QAbstractItemView)
 
 from PyQt5 import QtQuick
+import xmlschema
 import xml.etree.ElementTree as ET
 import sys
 
@@ -68,7 +70,11 @@ class MainWindow(QMainWindow):
         self.qtreeitemlist = {}
         self.tagHashMap = {}
         self.setWindowTitle("GEOS standard UI")
-        self.itree = ET.parse('test.xml')
+        self.sc = xmlschema.XMLSchema('schema.xsd')
+        self.fname = 'test.xml'
+        # self.sc_tree = self.sc.to_etree(self.fname)
+        pprint( self.sc.to_etree(self.fname) )
+        self.itree = ET.parse(self.fname)
         # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
         nb_elt = len(self.itree.getroot().findall(".//*"))
