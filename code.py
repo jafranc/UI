@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         # self.labellist = {}
+        self.visited = {}
         self.showlist = []
         self.qwidgetlist = {}
         self.qtreeitemlist = {}
@@ -85,7 +86,7 @@ class MainWindow(QMainWindow):
         self.sc = xmlschema.XMLSchema('schema.xsd')
         self.fname = 'test.xml'
         self.sc_tree = ET.ElementTree()
-        self.sc_tree._setroot( ET.Element( "Problem", stringify(self.sc.to_dict(self.fname)) ) )
+        self.sc_tree._setroot(ET.Element("Problem", stringify(self.sc.to_dict(self.fname))))
         # pprint( self.sc.to_etree(self.fname) )
         self.itree = ET.parse(self.fname)
         print(xmlschema.etree_tostring(self.sc_tree.getroot()))
@@ -101,8 +102,6 @@ class MainWindow(QMainWindow):
         self.treewidget.setHeaderLabel('Object Tree')
         self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.treewidget.itemActivated.connect(self.activate_button)
-
-
 
         suffix = '\t'
 
@@ -132,8 +131,6 @@ class MainWindow(QMainWindow):
             else:
                 col_num += len(list(child)) * [col]
 
-            print(range(col, col + len(list(child))))
-
             frame = QFrame()
             h = self.append_in_dict(child, frame)
 
@@ -146,7 +143,7 @@ class MainWindow(QMainWindow):
             childit.setExpanded(True)
             self.showlist.append(h)
             self.qtreeitemlist[h] = childit
-            print(gen, child.tag)
+            # print(gen, child.tag)
 
             for k, v in child.attrib.items():
                 if re.match(r'logLevel', k):
@@ -186,13 +183,14 @@ class MainWindow(QMainWindow):
         container.setLayout(self.vlayout)
         self.setCentralWidget(container)
 
-    def append_in_dict(self, child, frame, c = 0):
+    def append_in_dict(self, child, frame, c=0):
         h = hash(child.tag + str(c))
+        print('putting h : {} for : {}'.format(h, child.tag + str(c)))
         if not h in self.qwidgetlist:
             self.tagHashMap[h] = child.tag
             self.qwidgetlist[h] = frame
         else:
-            h = self.append_in_dict(child, frame, c+1 )
+            h = self.append_in_dict(child, frame, c + 1)
         return h
 
     def test_if_widget_present(self, col, frame, gen, max_gen):
@@ -204,14 +202,15 @@ class MainWindow(QMainWindow):
 
     def activate_button(self):
         # self.button.show()
-        print('before')
-        print([ self.tagHashMap[h] for h in self.showlist])
+        # print('before')
+        print([self.tagHashMap[h] for h in self.showlist])
         # self.appendAllChildren(self.showlist)
         for h in self.showlist:
             self.qwidgetlist[h].hide()
         self.showlist = []
 
-        self.showlist = [ h for item in self.treewidget.selectedItems() for h,v in self.qtreeitemlist.items() if v==item ]
+        self.showlist = [h for item in self.treewidget.selectedItems() for h, v in self.qtreeitemlist.items() if
+                         v == item]
         # self.appendAllChildren(self.showlist)
 
         for h in self.showlist:
@@ -229,45 +228,80 @@ class MainWindow(QMainWindow):
         # text = self.textEdit.toPlainText()
         # text = \
         self.gen_txt(name[0])
+        self.visited = {}
         # with open(name, 'w') as f:
         #     f.write(text)
         # f.close()
 
+    def DFS(self, qr, parent):
+
+        c = 0
+        if parent is not None:
+            c = len(parent.findall(qr.text(0)))
+        h = hash(qr.text(0) + str(c))
+        print('retrieving for {} h: {}'.format(qr.text(0) + str(c), h))
+
+        self.visited[h] = True
+        current = self.qform_to_etree(self.qwidgetlist[h])
+        if parent is not None:
+            parent.append(current)
+
+        print(qr.childCount())
+
+
+        for ic in range(qr.childCount()):
+            if parent is not None:
+                c = len(parent.findall(qr.child(ic).text(0)))
+            h = hash(qr.child(ic).text(0) + str(c))
+            if not h in self.visited:
+               self.DFS(qr.child(ic),current)
+
+        print(current)
+
+        return current
+
+
     def gen_txt(self, fname):
         index = self.vlayout.count()
         print(index)
-        problem = None
-        for i in range(0, index - 1):  # last widget is a button
-            qform = self.vlayout.itemAt(i).widget().layout()
-            c = qform.rowCount()
-            for j in range(0, c):
-                # ql = qform.itemAt(j,QFormLayout.LabelRole).widget()
-                qw = qform.itemAt(j, QFormLayout.FieldRole)
-                ql = qform.itemAt(j, QFormLayout.LabelRole)
-                if ql is None:
-                    if problem is None:
-                        problem = ET.Element(qw.widget().text())
-                    else:
-                        last_elem = ET.Element(qw.widget().text())
-                        problem.append(last_elem)
-                else:
-                    if isinstance(qw.layout(), QHBoxLayout):
-                        print("here")
-                        right = qw.layout().itemAt(0).widget().text()
-                    elif isinstance(qw.widget(), QLineEdit):
-                        right = qw.widget().text()
-                    elif isinstance(qw.widget(), QCheckBox):
-                        right = '1' if qw.widget().isChecked() else '0'
-                    elif isinstance(qw.widget(), QComboBox):
-                        right = str(qw.widget().currentIndex())
+        # problem = None
 
-                    last_elem.set(ql.widget().text(), right)
+        qr = self.treewidget.topLevelItem(0)
+        print(self.qwidgetlist)
+        print(self.tagHashMap)
+        problem = self.DFS(qr, None)
+
+        # for i in range(0, index - 1):  # last widget is a button
+        #     qform = self.vlayout.itemAt(i).widget().layout()
+        #     problem = self.qform_to_etree(problem, qform)
 
         otree = ET.ElementTree()
         otree._setroot(problem)
 
         indent(otree)
         otree.write(fname, xml_declaration="xml version=\"1.0\"")
+
+    def qform_to_etree(self, qframe):
+        qform = qframe.layout()
+        c = qform.rowCount()
+        for j in range(0, c):
+            ql = qform.itemAt(j, QFormLayout.LabelRole)
+            qw = qform.itemAt(j, QFormLayout.FieldRole)
+            if ql is None:
+                new_elem = ET.Element(qw.widget().text())
+            else:
+                if isinstance(qw.layout(), QHBoxLayout):
+                    # print("here")
+                    right = qw.layout().itemAt(0).widget().text()
+                elif isinstance(qw.widget(), QLineEdit):
+                    right = qw.widget().text()
+                elif isinstance(qw.widget(), QCheckBox):
+                    right = '1' if qw.widget().isChecked() else '0'
+                elif isinstance(qw.widget(), QComboBox):
+                    right = str(qw.widget().currentIndex())
+
+                new_elem.set(ql.widget().text(), right)
+        return new_elem
 
 
 if __name__ == "__main__":
