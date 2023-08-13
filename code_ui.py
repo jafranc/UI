@@ -88,11 +88,11 @@ class MainWindow(QMainWindow):
         self.sc_tree = ET.ElementTree()
         self.sc_tree._setroot(ET.Element("Problem", stringify(self.sc.to_dict(self.fname))))
         # pprint( self.sc.to_etree(self.fname) )
-        self.itree = ET.parse(self.fname)
         print(xmlschema.etree_tostring(self.sc_tree.getroot()))
-        # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         self.otree = ET.ElementTree()
-        nb_elt = len(self.itree.getroot().findall(".//*"))
+        # nb_elt = len(self.itree.getroot().findall(".//*"))
+
+
 
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
@@ -103,28 +103,44 @@ class MainWindow(QMainWindow):
         self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.treewidget.itemActivated.connect(self.activate_button)
 
-        suffix = '\t'
+        self.button_save = QPushButton("Save as...")
+        self.button_save.clicked.connect(self.file_save)
 
-        visit = [self.itree.getroot()]
-        visit_item = [QTreeWidgetItem(self.treewidget)]
-        visit_item[0].setText(0, visit[0].tag)
-        # visit_item[0].setText(0,"Test")
-        # seconditem = QTreeWidgetItem(visit_item[0])
+        self.button_open = QPushButton("Open")
+        self.button_open.clicked.connect(self.file_open)
+
+    ##
+        self.evaluate_file()
+
+    def evaluate_file(self):
+        self.itree = ET.parse(self.fname)
+        # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
+        visit_etree = [self.itree.getroot()]
+        visit_indices = [visit_etree[0].tag + '_0']  # root always unique
+        visit_qtitem = [QTreeWidgetItem(self.treewidget)]
+        visit_qtitem[0].setText(0, visit_etree[0].tag)
+        # visit_qtitem[0].setText(0,"Test")
+        # seconditem = QTreeWidgetItem(visit_qtitem[0])
         # seconditem.setText(0,"Subtest")
-
         # for child in self.itree.iter():
         gen_num = [0]
         col_num = [0]
         max_gen = 0
-        while len(visit):
-            child = visit.pop(0)
-            childit = visit_item.pop(0)
+        # todo refactor in BFS
+        while len(visit_etree):
+            child = visit_etree.pop(0)
+            refomated_tag = visit_indices.pop(0)
+            childit = visit_qtitem.pop(0)
+
             # col = ((col+1) if gen==old_gen else col) % 3
             gen = gen_num.pop(0)
             max_gen = gen if gen > max_gen else max_gen
+
             col = col_num.pop(0)
-            visit += list(child)
-            visit_item += [QTreeWidgetItem(childit) for i in range(len(list(child)))]
+            visit_etree += list(child)
+            visit_indices += self.avoid_duplicates(list(child))
+            visit_qtitem += [QTreeWidgetItem(childit) for i in range(len(list(child)))]
+
             gen_num += len(list(child)) * [gen + 1]
             if child.tag == "Problem":
                 col_num += range(0, len(list(child)))
@@ -137,14 +153,14 @@ class MainWindow(QMainWindow):
             frame.setLineWidth(2)
             frame.setFrameStyle(QFrame.Panel | QFrame.Plain)
             layout = QFormLayout()
-            layout.addRow(QLabel(suffix + child.tag))
+            layout.addRow(QLabel(child.tag))
 
-            childit.setText(0, child.tag)
+            childit.setText(0, refomated_tag)
             childit.setExpanded(True)
             self.showlist.append(h)
             self.qtreeitemlist[h] = childit
-            # print(gen, child.tag)
 
+            # todo refactor in special item
             for k, v in child.attrib.items():
                 if re.match(r'logLevel', k):
                     qc = QComboBox()
@@ -171,23 +187,33 @@ class MainWindow(QMainWindow):
             frame.setLayout(layout)
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
-
-        self.button = QPushButton("Save as...")
-        self.button.clicked.connect(self.file_save)
-
-        # self.button.hide()
-
-        self.vlayout.addWidget(self.treewidget, 0, 0, max_gen, 1)
-        self.vlayout.addWidget(self.button, max_gen + 1, 0)
+        self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
+        self.vlayout.addWidget(self.button_open, max_gen, 0)
+        self.vlayout.addWidget(self.button_save, max_gen + 1, 0)
         container = QWidget()
         container.setLayout(self.vlayout)
         self.setCentralWidget(container)
 
+    def avoid_duplicates(self, etree_list):
+        tag_list = [ elt.tag for elt in etree_list ]
+        uniq = [ item +'_0' for item in tag_list if tag_list.count(item) == 1]
+        dup = [ item for item in tag_list if tag_list.count(item) > 1]
+        for elt in set(dup):
+            c = 0
+            for i,item in enumerate(dup):
+                if item == elt:
+                    dup[i] = item + '_' + str(c)
+                    c += 1
+
+        uniq.extend(dup)
+        return uniq
+
+
+
     def append_in_dict(self, child, frame, c=0):
-        h = hash(child.tag + str(c))
-        print('putting h : {} for : {}'.format(h, child.tag + str(c)))
-        if not h in self.qwidgetlist:
-            self.tagHashMap[h] = child.tag
+        h = hash(child.tag + '_' + str(c))
+        if h not in self.qwidgetlist:
+            self.tagHashMap[h] = child.tag + '_' + str(c)
             self.qwidgetlist[h] = frame
         else:
             h = self.append_in_dict(child, frame, c + 1)
@@ -228,19 +254,17 @@ class MainWindow(QMainWindow):
         # text = self.textEdit.toPlainText()
         # text = \
         self.gen_txt(name[0])
-        self.visited = {}
         # with open(name, 'w') as f:
         #     f.write(text)
         # f.close()
 
+    def file_open(self):
+       self.fname,_ = QFileDialog.getOpenFileName(self, 'Open File')
+       self.evaluate_file()
+
     def DFS(self, qr, parent):
 
-        c = 0
-        if parent is not None:
-            c = len(parent.findall(qr.text(0)))
-        h = hash(qr.text(0) + str(c))
-        print('retrieving for {} h: {}'.format(qr.text(0) + str(c), h))
-
+        h = hash(qr.text(0))
         self.visited[h] = True
         current = self.qform_to_etree(self.qwidgetlist[h])
         if parent is not None:
@@ -250,9 +274,7 @@ class MainWindow(QMainWindow):
 
 
         for ic in range(qr.childCount()):
-            if parent is not None:
-                c = len(parent.findall(qr.child(ic).text(0)))
-            h = hash(qr.child(ic).text(0) + str(c))
+            h = hash(qr.child(ic).text(0) )
             if not h in self.visited:
                self.DFS(qr.child(ic),current)
 
@@ -263,17 +285,10 @@ class MainWindow(QMainWindow):
 
     def gen_txt(self, fname):
         index = self.vlayout.count()
-        print(index)
-        # problem = None
-
         qr = self.treewidget.topLevelItem(0)
         print(self.qwidgetlist)
         print(self.tagHashMap)
         problem = self.DFS(qr, None)
-
-        # for i in range(0, index - 1):  # last widget is a button
-        #     qform = self.vlayout.itemAt(i).widget().layout()
-        #     problem = self.qform_to_etree(problem, qform)
 
         otree = ET.ElementTree()
         otree._setroot(problem)
