@@ -8,6 +8,9 @@ from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QLabel,
                              QLineEdit,
+                             QMenu,
+                             QMenuBar,
+                             QAction,
                              QVBoxLayout,
                              QHBoxLayout,
                              QWidget,
@@ -92,8 +95,6 @@ class MainWindow(QMainWindow):
         self.otree = ET.ElementTree()
         # nb_elt = len(self.itree.getroot().findall(".//*"))
 
-
-
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
@@ -103,13 +104,16 @@ class MainWindow(QMainWindow):
         self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.treewidget.itemActivated.connect(self.activate_button)
 
-        self.button_save = QPushButton("Save as...")
-        self.button_save.clicked.connect(self.file_save)
+        self.file_menu = QMenu("File",self)
+        open_action = QAction("Open", self)
+        open_action.triggered.connect(self.file_open)
+        self.file_menu.addAction(open_action)
+        save_action = QAction("Save as ...", self)
+        save_action.triggered.connect(self.file_save)
+        self.file_menu.addAction(save_action)
 
-        self.button_open = QPushButton("Open")
-        self.button_open.clicked.connect(self.file_open)
-
-    ##
+        self.menuBar().addMenu(self.file_menu)
+        ##
         self.evaluate_file()
 
     def evaluate_file(self):
@@ -188,27 +192,25 @@ class MainWindow(QMainWindow):
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
         self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
-        self.vlayout.addWidget(self.button_open, max_gen, 0)
-        self.vlayout.addWidget(self.button_save, max_gen + 1, 0)
+        # self.vlayout.addWidget(self.button_open, max_gen, 0)
+        # self.vlayout.addWidget(self.button_save, max_gen + 1, 0)
         container = QWidget()
         container.setLayout(self.vlayout)
         self.setCentralWidget(container)
 
     def avoid_duplicates(self, etree_list):
-        tag_list = [ elt.tag for elt in etree_list ]
-        uniq = [ item +'_0' for item in tag_list if tag_list.count(item) == 1]
-        dup = [ item for item in tag_list if tag_list.count(item) > 1]
+        tag_list = [elt.tag for elt in etree_list]
+        uniq = [item + '_0' for item in tag_list if tag_list.count(item) == 1]
+        dup = [item for item in tag_list if tag_list.count(item) > 1]
         for elt in set(dup):
             c = 0
-            for i,item in enumerate(dup):
+            for i, item in enumerate(dup):
                 if item == elt:
                     dup[i] = item + '_' + str(c)
                     c += 1
 
         uniq.extend(dup)
         return uniq
-
-
 
     def append_in_dict(self, child, frame, c=0):
         h = hash(child.tag + '_' + str(c))
@@ -259,8 +261,8 @@ class MainWindow(QMainWindow):
         # f.close()
 
     def file_open(self):
-       self.fname,_ = QFileDialog.getOpenFileName(self, 'Open File')
-       self.evaluate_file()
+        self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
+        self.evaluate_file()
 
     def DFS(self, qr, parent):
 
@@ -272,16 +274,14 @@ class MainWindow(QMainWindow):
 
         print(qr.childCount())
 
-
         for ic in range(qr.childCount()):
-            h = hash(qr.child(ic).text(0) )
+            h = hash(qr.child(ic).text(0))
             if not h in self.visited:
-               self.DFS(qr.child(ic),current)
+                self.DFS(qr.child(ic), current)
 
         print(current)
 
         return current
-
 
     def gen_txt(self, fname):
         index = self.vlayout.count()
