@@ -9,8 +9,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QLabel,
                              QLineEdit,
                              QMenu,
-                             QMenuBar,
                              QAction,
+                             QScrollArea,
                              QVBoxLayout,
                              QHBoxLayout,
                              QWidget,
@@ -98,13 +98,7 @@ class MainWindow(QMainWindow):
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
-        self.vlayout = QGridLayout()
-        self.treewidget = QTreeWidget()
-        self.treewidget.setHeaderLabel('Object Tree')
-        self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        self.treewidget.itemActivated.connect(self.activate_button)
-
-        self.file_menu = QMenu("File",self)
+        self.file_menu = QMenu("File", self)
         open_action = QAction("Open", self)
         open_action.triggered.connect(self.file_open)
         self.file_menu.addAction(open_action)
@@ -117,6 +111,13 @@ class MainWindow(QMainWindow):
         self.evaluate_file()
 
     def evaluate_file(self):
+        self.vlayout = QGridLayout()
+        self.treewidget = QTreeWidget()
+        self.treewidget.setHeaderLabel('Object Tree')
+        self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.treewidget.itemActivated.connect(self.activate_button)
+
+
         self.itree = ET.parse(self.fname)
         # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
         visit_etree = [self.itree.getroot()]
@@ -188,6 +189,8 @@ class MainWindow(QMainWindow):
                 else:
                     layout.addRow(k, QLineEdit(v))
 
+            self.plus_button = QPushButton("+")
+            layout.addRow('', self.plus_button)
             frame.setLayout(layout)
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
@@ -196,7 +199,10 @@ class MainWindow(QMainWindow):
         # self.vlayout.addWidget(self.button_save, max_gen + 1, 0)
         container = QWidget()
         container.setLayout(self.vlayout)
-        self.setCentralWidget(container)
+        scollable_area = QScrollArea()
+        scollable_area.setWidget(container)
+        scollable_area.show()
+        self.setCentralWidget(scollable_area)
 
     def avoid_duplicates(self, etree_list):
         tag_list = [elt.tag for elt in etree_list]
@@ -227,6 +233,15 @@ class MainWindow(QMainWindow):
         else:
             max_gen = self.test_if_widget_present(col, frame, gen + 1, max_gen + 1)
         return max_gen
+
+    def clean_widgets(self):
+
+        self.qwidgetlist.clear()
+        self.tagHashMap.clear()
+        for ic in range(self.vlayout.count()):
+            self.vlayout.itemAt(ic).widget().deleteLater()
+
+
 
     def activate_button(self):
         # self.button.show()
@@ -262,6 +277,7 @@ class MainWindow(QMainWindow):
 
     def file_open(self):
         self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
+        self.clean_widgets()
         self.evaluate_file()
 
     def DFS(self, qr, parent):
