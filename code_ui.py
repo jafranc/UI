@@ -207,11 +207,13 @@ class MainWindow(QMainWindow):
                 if re.match(r'logLevel', k):
                     qc = QComboBox()
                     qc.addItems([str(i) for i in range(0, 8)])
+                    qc.currentIndexChanged.connect(partial(self.update_combo,child, k))
                     layout.addRow(k, qc)
                 elif re.match(r'(max|begin|end)Time$', k) or re.match(r'(force|initial)Dt', k) \
                         or re.match(r'timeFrequency', k):
                     ql = QHBoxLayout()
                     qe = QLineEdit(v)
+                    qe.textChanged.connect(partial(self.update_line,child, k))
                     ql.addWidget(qe)
                     qc = QComboBox()
                     qc.addItems(self.qc_time_list)
@@ -222,9 +224,13 @@ class MainWindow(QMainWindow):
                 elif re.match(r'useMass|directParallel|targetExactTimestep', k):
                     qcb = QCheckBox()
                     qcb.setChecked(bool(int(v)))
+                    qcb.stateChanged.connect(partial(self.update_bool,child, k))
                     layout.addRow(k, qcb)
                 else:
-                    layout.addRow(k, QLineEdit(v))
+                    qe = QLineEdit(v)
+                    qe.textChanged.connect(partial(self.update_line,child, k))
+                    layout.addRow(k, qe)
+
 
             frame.setLayout(layout)
 
@@ -237,6 +243,16 @@ class MainWindow(QMainWindow):
         scollable_area.setWidget(container)
         scollable_area.show()
         self.setCentralWidget(scollable_area)
+
+    def update_line(self, elt, k, text):
+        elt.attrib[k] = text
+
+    def update_combo(self, elt, k, value):
+        elt.attrib[k] = str(value)
+
+    def update_bool(self, elt, k, state):
+        #No tri state
+        elt.attrib[k] = "0" if state==0 else "1"
 
 #todo check if can get parent widget otherwise
     def reduction(self, etree_elt, widget):
