@@ -21,7 +21,7 @@
 
   <Mesh>
     <InternalMesh
-      name="mesh1"
+      name="my_mesh"
       elementTypes="{ C3D8 }"
       xCoords="{ 0, 30 }"
       yCoords="{ 0, 30 }"
