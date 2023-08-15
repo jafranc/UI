@@ -21,24 +21,12 @@ from PyQt5.QtWidgets import (QApplication,
                              QComboBox,
                              QCheckBox,
                              QTreeWidgetItem,
-                             QSlider, QTreeWidget, QGridLayout, QAbstractItemView)
+                             QTreeWidget, QGridLayout, QAbstractItemView)
 
 from PyQt5 import QtQuick
 import xmlschema
 import xml.etree.ElementTree as ET
 import sys
-
-
-def stringify(mdict: dict):
-    rdict = {}
-    for key in mdict:
-        if isinstance(mdict[key], list):
-            type_check = [isinstance(item, str) for item in mdict[key]]
-            if all(type_check):
-                mdict[key] = '[' + ','.join(mdict[key]) + ']'
-        rdict[str(key)] = re.sub(r'\[', '{ ', str(mdict[key]))
-        rdict[str(key)] = re.sub(r'\]', ' }', rdict[str(key)])
-    return rdict
 
 
 def iter_indent(elt: ET.Element):
@@ -86,12 +74,10 @@ class MainWindow(QMainWindow):
         self.qtreeitemlist = {}
         self.tagHashMap = {}
         self.setWindowTitle("GEOS standard UI")
-        self.sc = xmlschema.XMLSchema('schema.xsd')
         self.fname = 'test.xml'
-        self.sc_tree = ET.ElementTree()
-        self.sc_tree._setroot(ET.Element("Problem", stringify(self.sc.to_dict(self.fname))))
-        # pprint( self.sc.to_etree(self.fname) )
-        print(xmlschema.etree_tostring(self.sc_tree.getroot()))
+
+        self.evaluate_sctree()
+
         self.otree = ET.ElementTree()
         # nb_elt = len(self.itree.getroot().findall(".//*"))
 
@@ -105,22 +91,30 @@ class MainWindow(QMainWindow):
         save_action = QAction("Save as ...", self)
         save_action.triggered.connect(self.file_save)
         self.file_menu.addAction(save_action)
+        reset_action = QAction("Reset to default", self)
+        reset_action.triggered.connect(self.reset_to_default)
+        self.file_menu.addAction(reset_action)
 
         self.menuBar().addMenu(self.file_menu)
         ##
-        self.evaluate_file()
+        itree = ET.parse(self.fname)
+        self.evaluate_file(itree)
 
-    def evaluate_file(self):
+    def evaluate_sctree(self):
+        self.sc = xmlschema.XMLSchema('schema.xsd')
+        self.sc_tree = ET.ElementTree()
+        parent = ET.Element('Problem')
+        parent = self.dict_to_etree(self.sc.to_dict(self.fname), parent)
+        self.sc_tree._setroot(parent)
+
+    def evaluate_file(self, itree):
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
         self.treewidget.setHeaderLabel('Object Tree')
         self.treewidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.treewidget.itemActivated.connect(self.activate_button)
 
-
-        self.itree = ET.parse(self.fname)
-        # self.itree = ET.parse('deadoil_3ph_corey_1d.xml')
-        visit_etree = [self.itree.getroot()]
+        visit_etree = [itree.getroot()]
         visit_indices = [visit_etree[0].tag + '_0']  # root always unique
         visit_qtitem = [QTreeWidgetItem(self.treewidget)]
         visit_qtitem[0].setText(0, visit_etree[0].tag)
@@ -189,8 +183,8 @@ class MainWindow(QMainWindow):
                 else:
                     layout.addRow(k, QLineEdit(v))
 
-            self.plus_button = QPushButton("+")
-            layout.addRow('', self.plus_button)
+            # self.plus_button = QPushButton("+")
+            # layout.addRow('', self.plus_button)
             frame.setLayout(layout)
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
@@ -241,7 +235,17 @@ class MainWindow(QMainWindow):
         for ic in range(self.vlayout.count()):
             self.vlayout.itemAt(ic).widget().deleteLater()
 
+    def dict_to_etree(self, mdict: dict, parent):
 
+        for k,v in mdict.items():
+            if isinstance(v,list):
+                elt = ET.Element(k)
+                #sub
+                parent.append( self.dict_to_etree(v[0],elt) )
+            else:
+                parent.set(k[1:],v)
+
+        return parent
 
     def activate_button(self):
         # self.button.show()
@@ -278,7 +282,13 @@ class MainWindow(QMainWindow):
     def file_open(self):
         self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
         self.clean_widgets()
-        self.evaluate_file()
+        itree = ET.parse(self.fname)
+        self.evaluate_file(itree)
+        self.evaluate_sctree()
+
+    def reset_to_default(self):
+        self.clean_widgets()
+        self.evaluate_file(self.sc_tree)
 
     def DFS(self, qr, parent):
 
