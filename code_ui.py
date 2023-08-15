@@ -241,14 +241,20 @@ class MainWindow(QMainWindow):
 #todo check if can get parent widget otherwise
     def reduction(self, etree_elt, widget):
 
+        rm_list = []
         sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
         for k, v in sctree_elt.attrib.items():
             if k in etree_elt.attrib and v == etree_elt.attrib[k]:
+                rm_list.append(k)
                 #delete rows with that label in widget
                 layout = widget.layout()
                 for irow in reversed(range(1,layout.rowCount())):
                     if layout.itemAt(irow, QFormLayout.LabelRole).widget().text() == k:
                         layout.removeRow(irow)
+
+        for k in rm_list:
+            del etree_elt.attrib[k]
+
     def augmentation(self, etree_elt, widget):
         pop_list = []
         msg_box = PopUpWindows()
@@ -268,9 +274,6 @@ class MainWindow(QMainWindow):
         for k in add_list:
             layout.addRow(k, QLineEdit(sc_list[k]) )
             etree_elt.set(k, sc_list[k])
-
-
-
 
 
     def avoid_duplicates(self, etree_list):
@@ -365,6 +368,7 @@ class MainWindow(QMainWindow):
     def reset_to_default(self):
         self.clean_widgets()
         self.evaluate_file(self.sc_tree)
+        self.evaluate_sctree()
 
     def DFS(self, qr, parent):
 
