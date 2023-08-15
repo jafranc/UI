@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QTreeWidgetItem,
                              QTreeWidget, QGridLayout, QAbstractItemView)
 
-from PyQt5 import QtQuick
+from PyQt5 import QtQuick, QtCore
 import xmlschema
 import xml.etree.ElementTree as ET
 import sys
@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         gen_num = [0]
         col_num = [0]
         max_gen = 0
-        # todo refactor in BFS
+        # todo refactor in BFS with callback
         while len(visit_etree):
             child = visit_etree.pop(0)
             refomated_tag = visit_indices.pop(0)
@@ -150,6 +150,10 @@ class MainWindow(QMainWindow):
                 col_num += len(list(child)) * [col]
 
             frame = QFrame()
+            frame.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+            frame_action = QAction("Reduce",frame)
+            frame_action.triggered.connect(partial(self.reduction,child, frame))
+            frame.addAction(frame_action)
             h = self.append_in_dict(child, frame)
 
             frame.setLineWidth(2)
@@ -189,15 +193,26 @@ class MainWindow(QMainWindow):
             frame.setLayout(layout)
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
+
         self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
-        # self.vlayout.addWidget(self.button_open, max_gen, 0)
-        # self.vlayout.addWidget(self.button_save, max_gen + 1, 0)
         container = QWidget()
         container.setLayout(self.vlayout)
         scollable_area = QScrollArea()
         scollable_area.setWidget(container)
         scollable_area.show()
         self.setCentralWidget(scollable_area)
+
+#todo check if can get parent widget otherwise
+    def reduction(self, etree_elt, widget):
+
+        sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
+        for k, v in sctree_elt.attrib.items():
+            if k in etree_elt.attrib and v == etree_elt.attrib[k]:
+                #delete rows with that label in widget
+                layout = widget.layout()
+                for irow in reversed(range(1,layout.rowCount())):
+                    if layout.itemAt(irow, QFormLayout.LabelRole).widget().text() == k:
+                        layout.removeRow(irow)
 
     def avoid_duplicates(self, etree_list):
         tag_list = [elt.tag for elt in etree_list]
@@ -213,6 +228,9 @@ class MainWindow(QMainWindow):
         uniq.extend(dup)
         return uniq
 
+    def foo(self):
+        print('$%%%%%%%%$$$%%%%% FOO')
+
     def append_in_dict(self, child, frame, c=0):
         h = hash(child.tag + '_' + str(c))
         if h not in self.qwidgetlist:
@@ -225,7 +243,6 @@ class MainWindow(QMainWindow):
     def test_if_widget_present(self, col, frame, gen, max_gen):
         if self.vlayout.itemAtPosition(gen + 1, col + 1) is None:
             self.vlayout.addWidget(frame, gen + 1, col + 1)
-            # self.vlayout.addWidget(self.plus_button, gen + 2, col+1)
         else:
             max_gen = self.test_if_widget_present(col, frame, gen + 1, max_gen + 1)
         return max_gen
@@ -278,9 +295,6 @@ class MainWindow(QMainWindow):
         # text = self.textEdit.toPlainText()
         # text = \
         self.gen_txt(name[0])
-        # with open(name, 'w') as f:
-        #     f.write(text)
-        # f.close()
 
     def file_open(self):
         self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
