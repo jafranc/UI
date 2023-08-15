@@ -1,8 +1,5 @@
-# from PyQt5.QtGui import QGuiApplication
-# from PyQt5.QtQml import QQmlApplicationEngine
 import re
 from functools import partial
-from pprint import pprint
 
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
@@ -24,10 +21,11 @@ from PyQt5.QtWidgets import (QApplication,
                              QTreeWidget, QGridLayout, QAbstractItemView, QMessageBox, QDialog, QListWidget,
                              QDialogButtonBox)
 
-from PyQt5 import QtQuick, QtCore
+from PyQt5 import QtCore
 import xmlschema
 import xml.etree.ElementTree as ET
 import sys
+from xml_formatter import format_file
 
 
 def iter_indent(elt: ET.Element):
@@ -373,6 +371,7 @@ class MainWindow(QMainWindow):
         # text = self.textEdit.toPlainText()
         # text = \
         self.gen_txt(name[0])
+        format_file(name[0])
 
     def file_open(self):
         self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
