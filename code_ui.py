@@ -108,6 +108,9 @@ class MainWindow(QMainWindow):
         self.sc_tree._setroot(parent)
 
     def evaluate_file(self, itree):
+
+        # self.plus_button = QPushButton("+")
+
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
         self.treewidget.setHeaderLabel('Object Tree')
@@ -183,8 +186,6 @@ class MainWindow(QMainWindow):
                 else:
                     layout.addRow(k, QLineEdit(v))
 
-            # self.plus_button = QPushButton("+")
-            # layout.addRow('', self.plus_button)
             frame.setLayout(layout)
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
@@ -224,6 +225,7 @@ class MainWindow(QMainWindow):
     def test_if_widget_present(self, col, frame, gen, max_gen):
         if self.vlayout.itemAtPosition(gen + 1, col + 1) is None:
             self.vlayout.addWidget(frame, gen + 1, col + 1)
+            # self.vlayout.addWidget(self.plus_button, gen + 2, col+1)
         else:
             max_gen = self.test_if_widget_present(col, frame, gen + 1, max_gen + 1)
         return max_gen
@@ -232,6 +234,7 @@ class MainWindow(QMainWindow):
 
         self.qwidgetlist.clear()
         self.tagHashMap.clear()
+        self.showlist.clear()
         for ic in range(self.vlayout.count()):
             self.vlayout.itemAt(ic).widget().deleteLater()
 
