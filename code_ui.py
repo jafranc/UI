@@ -21,7 +21,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QComboBox,
                              QCheckBox,
                              QTreeWidgetItem,
-                             QTreeWidget, QGridLayout, QAbstractItemView)
+                             QTreeWidget, QGridLayout, QAbstractItemView, QMessageBox, QDialog, QListWidget,
+                             QDialogButtonBox)
 
 from PyQt5 import QtQuick, QtCore
 import xmlschema
@@ -49,6 +50,35 @@ def indent(tree: ET.ElementTree):
     # correct level0
     for elt in tree.getroot():
         elt.tail = elt.tail[:-1]
+
+
+class PopUpWindows(QDialog):
+    def __init__(self):
+        super().__init__()
+
+
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.button_box = QDialogButtonBox(buttons)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.list_widget)
+        self.layout.addWidget(self.button_box)
+
+        self.setLayout(self.layout)
+
+    def setFields(self, field_list):
+        [ self.list_widget.addItem(field) for field in field_list ]
+
+    def selected(self):
+            return [item.text() for item in self.list_widget.selectedItems()]
+
+    def closeEvent(self, event):
+        event.accept()
 
 
 class MainWindow(QMainWindow):
@@ -150,10 +180,16 @@ class MainWindow(QMainWindow):
                 col_num += len(list(child)) * [col]
 
             frame = QFrame()
+
             frame.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
-            frame_action = QAction("Reduce",frame)
-            frame_action.triggered.connect(partial(self.reduction,child, frame))
-            frame.addAction(frame_action)
+            frame_action_red = QAction("Reduce",frame)
+            frame_action_red.triggered.connect(partial(self.reduction,child, frame))
+            frame.addAction(frame_action_red)
+            frame_action_aug = QAction("Augmente",frame)
+            frame_action_aug.triggered.connect(partial(self.augmentation,child, frame))
+            frame.addAction(frame_action_aug)
+
+
             h = self.append_in_dict(child, frame)
 
             frame.setLineWidth(2)
@@ -213,6 +249,29 @@ class MainWindow(QMainWindow):
                 for irow in reversed(range(1,layout.rowCount())):
                     if layout.itemAt(irow, QFormLayout.LabelRole).widget().text() == k:
                         layout.removeRow(irow)
+    def augmentation(self, etree_elt, widget):
+        pop_list = []
+        msg_box = PopUpWindows()
+        msg_box.setWindowTitle('Attribute to add')
+        sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
+        for k, v in sctree_elt.attrib.items():
+            if k not in etree_elt.attrib:
+                #delete rows with that label in widget
+                pop_list.append(k)
+
+        msg_box.setFields(pop_list)
+        msg_box.exec()
+        add_list = msg_box.selected()
+
+        layout = widget.layout()
+        sc_list = sctree_elt.attrib
+        for k in add_list:
+            layout.addRow(k, QLineEdit(sc_list[k]) )
+            etree_elt.set(k, sc_list[k])
+
+
+
+
 
     def avoid_duplicates(self, etree_list):
         tag_list = [elt.tag for elt in etree_list]
