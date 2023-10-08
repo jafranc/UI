@@ -27,33 +27,9 @@ import xml.etree.ElementTree as ET
 import sys
 from xml_formatter import format_file
 
-
-def iter_indent(elt: ET.Element):
-    for child in elt:
-        child.text += '\t'
-        iter_indent(child)
-        child.tail += '\t'
-    elt.text += '\t'
-
-
-def indent(tree: ET.ElementTree):
-    # init indent
-    for elt in tree.iter():
-        elt.text = '\n'
-        elt.tail = '\n\n'
-
-    # dfs indent
-    iter_indent(tree.getroot())
-
-    # correct level0
-    for elt in tree.getroot():
-        elt.tail = elt.tail[:-1]
-
-
 class PopUpWindows(QDialog):
     def __init__(self):
         super().__init__()
-
 
         self.list_widget = QListWidget()
         self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -70,14 +46,13 @@ class PopUpWindows(QDialog):
         self.setLayout(self.layout)
 
     def setFields(self, field_list):
-        [ self.list_widget.addItem(field) for field in field_list ]
+        [self.list_widget.addItem(field) for field in field_list]
 
     def selected(self):
-            return [item.text() for item in self.list_widget.selectedItems()]
+        return [item.text() for item in self.list_widget.selectedItems()]
 
     def closeEvent(self, event):
         event.accept()
-
 
 class MainWindow(QMainWindow):
 
@@ -180,13 +155,12 @@ class MainWindow(QMainWindow):
             frame = QFrame()
 
             frame.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
-            frame_action_red = QAction("Reduce",frame)
-            frame_action_red.triggered.connect(partial(self.reduction,child, frame))
+            frame_action_red = QAction("Reduce", frame)
+            frame_action_red.triggered.connect(partial(self.reduction, child, frame))
             frame.addAction(frame_action_red)
-            frame_action_aug = QAction("Augmente",frame)
-            frame_action_aug.triggered.connect(partial(self.augmentation,child, frame))
+            frame_action_aug = QAction("Augmente", frame)
+            frame_action_aug.triggered.connect(partial(self.augmentation, child, frame))
             frame.addAction(frame_action_aug)
-
 
             h = self.append_in_dict(child, frame)
 
@@ -205,13 +179,13 @@ class MainWindow(QMainWindow):
                 if re.match(r'logLevel', k):
                     qc = QComboBox()
                     qc.addItems([str(i) for i in range(0, 8)])
-                    qc.currentIndexChanged.connect(partial(self.update_combo,child, k))
+                    qc.currentIndexChanged.connect(partial(self.update_combo, child, k))
                     layout.addRow(k, qc)
                 elif re.match(r'(max|begin|end)Time$', k) or re.match(r'(force|initial)Dt', k) \
                         or re.match(r'timeFrequency', k):
                     ql = QHBoxLayout()
                     qe = QLineEdit(v)
-                    qe.textChanged.connect(partial(self.update_line,child, k))
+                    qe.textChanged.connect(partial(self.update_line, child, k))
                     ql.addWidget(qe)
                     qc = QComboBox()
                     qc.addItems(self.qc_time_list)
@@ -222,13 +196,12 @@ class MainWindow(QMainWindow):
                 elif re.match(r'useMass|directParallel|targetExactTimestep', k):
                     qcb = QCheckBox()
                     qcb.setChecked(bool(int(v)))
-                    qcb.stateChanged.connect(partial(self.update_bool,child, k))
+                    qcb.stateChanged.connect(partial(self.update_bool, child, k))
                     layout.addRow(k, qcb)
                 else:
                     qe = QLineEdit(v)
-                    qe.textChanged.connect(partial(self.update_line,child, k))
+                    qe.textChanged.connect(partial(self.update_line, child, k))
                     layout.addRow(k, qe)
-
 
             frame.setLayout(layout)
 
@@ -249,20 +222,20 @@ class MainWindow(QMainWindow):
         elt.attrib[k] = str(value)
 
     def update_bool(self, elt, k, state):
-        #No tri state
-        elt.attrib[k] = "0" if state==0 else "1"
+        # No tri state
+        elt.attrib[k] = "0" if state == 0 else "1"
 
-#todo check if can get parent widget otherwise
+    # todo check if can get parent widget otherwise
     def reduction(self, etree_elt, widget):
 
         rm_list = []
-        sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
+        sctree_elt = self.sc_tree.find('.//' + etree_elt.tag)
         for k, v in sctree_elt.attrib.items():
             if k in etree_elt.attrib and v == etree_elt.attrib[k]:
                 rm_list.append(k)
-                #delete rows with that label in widget
+                # delete rows with that label in widget
                 layout = widget.layout()
-                for irow in reversed(range(1,layout.rowCount())):
+                for irow in reversed(range(1, layout.rowCount())):
                     if layout.itemAt(irow, QFormLayout.LabelRole).widget().text() == k:
                         layout.removeRow(irow)
 
@@ -273,10 +246,10 @@ class MainWindow(QMainWindow):
         pop_list = []
         msg_box = PopUpWindows()
         msg_box.setWindowTitle('Attribute to add')
-        sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
+        sctree_elt = self.sc_tree.find('.//' + etree_elt.tag)
         for k, v in sctree_elt.attrib.items():
             if k not in etree_elt.attrib:
-                #delete rows with that label in widget
+                # delete rows with that label in widget
                 pop_list.append(k)
 
         msg_box.setFields(pop_list)
@@ -286,9 +259,8 @@ class MainWindow(QMainWindow):
         layout = widget.layout()
         sc_list = sctree_elt.attrib
         for k in add_list:
-            layout.addRow(k, QLineEdit(sc_list[k]) )
+            layout.addRow(k, QLineEdit(sc_list[k]))
             etree_elt.set(k, sc_list[k])
-
 
     def avoid_duplicates(self, etree_list):
         tag_list = [elt.tag for elt in etree_list]
@@ -303,9 +275,6 @@ class MainWindow(QMainWindow):
 
         uniq.extend(dup)
         return uniq
-
-    def foo(self):
-        print('$%%%%%%%%$$$%%%%% FOO')
 
     def append_in_dict(self, child, frame, c=0):
         h = hash(child.tag + '_' + str(c))
@@ -333,13 +302,13 @@ class MainWindow(QMainWindow):
 
     def dict_to_etree(self, mdict: dict, parent):
 
-        for k,v in mdict.items():
-            if isinstance(v,list):
+        for k, v in mdict.items():
+            if isinstance(v, list):
                 elt = ET.Element(k)
-                #sub
-                parent.append( self.dict_to_etree(v[0],elt) )
+                # sub
+                parent.append(self.dict_to_etree(v[0], elt))
             else:
-                parent.set(k[1:],v)
+                parent.set(k[1:], v)
 
         return parent
 
@@ -351,11 +320,9 @@ class MainWindow(QMainWindow):
         for h in self.showlist:
             self.qwidgetlist[h].hide()
         self.showlist = []
-
         self.showlist = [h for item in self.treewidget.selectedItems() for h, v in self.qtreeitemlist.items() if
                          v == item]
         # self.appendAllChildren(self.showlist)
-
         for h in self.showlist:
             self.qwidgetlist[h].show()
 
@@ -414,7 +381,6 @@ class MainWindow(QMainWindow):
         otree = ET.ElementTree()
         otree._setroot(problem)
 
-        indent(otree)
         otree.write(fname, xml_declaration="xml version=\"1.0\"")
 
     def qform_to_etree(self, qframe):
