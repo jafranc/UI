@@ -1,10 +1,32 @@
 import sys
 
 from PyQt5.QtCore import Qt, QTimeLine
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QGuiApplication, QColorConstants
-from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QTabWidget, QProgressBar, QGraphicsView, QApplication
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QGuiApplication, QColorConstants, QPalette, QColor
+from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QTabWidget, QProgressBar, QGraphicsView, QApplication, QStyle
 
 from QTimeLineView import QTimeLineView
+
+def setup_dark_theme(qapp : QApplication):
+
+
+    darkPalette = QPalette()
+    darkPalette.setColor(QPalette.Window, QColor(53,53,53))
+    darkPalette.setColor(QPalette.WindowText, QColorConstants.White)
+    darkPalette.setColor(QPalette.Base, QColor(25,25,25))
+    darkPalette.setColor(QPalette.AlternateBase, QColor(53,53,53))
+    darkPalette.setColor(QPalette.ToolTipBase, QColorConstants.White)
+    darkPalette.setColor(QPalette.ToolTipText, QColorConstants.White)
+    darkPalette.setColor(QPalette.Text, QColorConstants.White)
+    darkPalette.setColor(QPalette.Button, QColor(53,53,53))
+    darkPalette.setColor(QPalette.ButtonText, QColorConstants.White)
+    darkPalette.setColor(QPalette.BrightText, QColorConstants.Red)
+    darkPalette.setColor(QPalette.Link, QColor(42,130,218))
+    darkPalette.setColor(QPalette.Highlight, QColor(42,130,218))
+    darkPalette.setColor(QPalette.HighlightedText, QColorConstants.Black)
+
+    qapp.setPalette(darkPalette)
+    qapp.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; "
+                       "border: 1px solid white; }")
 
 
 class MainWindow(QMainWindow):
@@ -64,6 +86,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    setup_dark_theme(app)
 
     window = MainWindow()
     window.show()
