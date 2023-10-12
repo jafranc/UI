@@ -1,5 +1,6 @@
 from PyQt5.QtCore import QPersistentModelIndex, QPoint, QRect, QEvent, QModelIndex, Qt, QRectF
-from PyQt5.QtGui import QHoverEvent, QHelpEvent, QPainter, QPalette, QPen, QColor, QColorConstants, QRegion
+from PyQt5.QtGui import QHoverEvent, QHelpEvent, QPainter, QPalette, QPen, QColor, QColorConstants, QRegion, QKeyEvent, \
+    QWheelEvent
 from PyQt5.QtWidgets import (QListView,
                              QAbstractItemView,
                              QTableView,
@@ -74,11 +75,11 @@ class QTimeLineView(QAbstractItemView):
                     break
 
                 item = self.model().index(i, 0)
-                # bgPenColor = QColor(item.data(Qt.DecorationRole).value).darker(200)
-                # bgFillColor = QColor(item.data(Qt.DecorationRole).value).darker(150)
+                bgPenColor = QColor(item.data(Qt.DecorationRole)).darker(200)
+                bgFillColor = QColor(item.data(Qt.DecorationRole)).darker(150)
                 #replace colors
-                bgPenColor = QColor(QColorConstants.Red)
-                bgFillColor = QColor(QColorConstants.Blue)
+                # bgPenColor = QColor(QColorConstants.Red)
+                # bgFillColor = QColor(QColorConstants.lue)
                 rectWithoutTimeStamps = a0.rect()
                 rectWithoutTimeStamps.setTop(self.timestempSectionHeight)
                 painter.setPen(bgPenColor)
@@ -149,19 +150,36 @@ class QTimeLineView(QAbstractItemView):
     def visualRegionForSelection(self, selection):
         return QRegion()
 
-    def viewportEvent(self, e: QHoverEvent):
-        if e.type() in [QEvent.HoverMove, QEvent.HoverEnter]:
+    def viewportEvent(self, e: QEvent):
+
+        if e.type() in [QEvent.MouseButtonPress]:
             self.update(QModelIndex(self.hoverIndex))
             self.hoverIndex = self.indexAt(e.pos())
+            mult = 0
+            offset = 100
+            alpha = 1.
+            if e.button() == Qt.LeftButton:
+                mult = 1
+            elif e.button() == Qt.RightButton:
+                mult = -1
+            elif e.button() == Qt.MiddleButton:
+                alpha = .5
             if self.hoverIndex.isValid():
-                self.hoverIndex = self.indexAt(e.pos())
                 val = self.hoverIndex.data(Qt.UserRole + 1)
-                self.hoverIndex.model().setData(self.hoverIndex,val+100, Qt.UserRole+1)
+                self.hoverIndex.model().setData(self.hoverIndex,val+ mult*offset, Qt.UserRole+1)
+                val = self.hoverIndex.data(Qt.UserRole + 2)
+                self.hoverIndex.model().setData(self.hoverIndex, alpha*val, Qt.UserRole+2)
                 self.update(self.hoverIndex)
-        elif e.type() in [QEvent.HoverLeave]:
-            self.update(QModelIndex(self.hoverIndex))
-            self.hoverIndex = QModelIndex()
-            self.update(self.hoverIndex)
+        # elif e.type() in [QEvent.HoverMove, QEvent.HoverEnter]:
+        #     self.update(QModelIndex(self.hoverIndex))
+        #     self.hoverIndex = self.indexAt(e.pos())
+        #     if self.hoverIndex.isValid():
+        #         self.hoverIndex = self.indexAt(e.pos())
+        #         self.update(self.hoverIndex)
+        # elif e.type() in [QEvent.HoverLeave]:
+        #     self.update(QModelIndex(self.hoverIndex))
+        #     self.hoverIndex = QModelIndex()
+        #     self.update(self.hoverIndex)
         elif e.type() in [QEvent.ToolTip, QEvent.QueryWhatsThis, QEvent.WhatsThis]:
             he = QHelpEvent(e)
             index = self.indexAt(he.pos())

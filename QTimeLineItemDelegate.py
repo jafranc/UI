@@ -20,8 +20,8 @@ class QTimeLineItemDelegate(QAbstractItemDelegate):
         thickness = 0.0
         pen = QPen(color.darker(300), thickness)
         brush = QBrush(color)
-        if (option.state & QStyle.State_Selected) or (option.state & QStyle.State_MouseOver):
-            pen.setColor(color.darker(150))
+        # if (option.state & QStyle.State_Selected) or (option.state & QStyle.State_MouseOver):
+        #     pen.setColor(color.darker(150))
         painter.setPen(pen)
         painter.setBrush(brush)
         painter.drawRect(option.rect)
