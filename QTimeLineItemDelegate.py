@@ -1,5 +1,5 @@
-from PyQt5.QtGui import QStandardItemModel, QPen, QBrush
-from PyQt5.QtWidgets import QAbstractItemDelegate, QStyle
+from PyQt5.QtGui import  QPen, QBrush
+from PyQt5.QtWidgets import QAbstractItemDelegate
 from PyQt5.QtCore import Qt
 
 

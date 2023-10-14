@@ -1,10 +1,8 @@
 from PyQt5.QtCore import QPersistentModelIndex, QPoint, QRect, QEvent, QModelIndex, Qt, QRectF
-from PyQt5.QtGui import QHoverEvent, QHelpEvent, QPainter, QPalette, QPen, QColor, QColorConstants, QRegion, QKeyEvent, \
-    QWheelEvent
-from PyQt5.QtWidgets import (QListView,
-                             QAbstractItemView,
-                             QTableView,
-                             QTreeView, QStyleOptionViewItem, QStyle, QAbstractScrollArea)
+from PyQt5.QtGui import QHelpEvent, QPainter, QPalette, QPen, QColor, QColorConstants, QRegion, QWheelEvent
+from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QStyleOptionViewItem)
 
 from QTimeLineItemDelegate import QTimeLineItemDelegate
 
@@ -187,9 +185,9 @@ class QTimeLineView(QAbstractItemView):
 
     def wheelEvent(self, a0):
         if a0.angleDelta().y() > 0:
-            self.setScale(self.scale*1.5)
+            self.setScale(self.scale * 1.5)
         else:
-            self.setScale(self.scale*.75)
+            self.setScale(self.scale * .75)
         self.updateScrollBars()
         self.viewport().update()
 
