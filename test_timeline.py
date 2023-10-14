@@ -1,8 +1,8 @@
 import sys
 
-from PyQt5.QtCore import Qt, QTimeLine
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QGuiApplication, QColorConstants, QPalette, QColor
-from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QTabWidget, QProgressBar, QGraphicsView, QApplication, QStyle
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants, QPalette, QColor
+from PyQt5.QtWidgets import QMainWindow, QTabWidget, QApplication
 
 from QTimeLineView import QTimeLineView
 
@@ -24,7 +24,7 @@ def setup_dark_theme(qapp: QApplication):
     darkPalette.setColor(QPalette.HighlightedText, QColorConstants.Black)
 
     qapp.setPalette(darkPalette)
-    qapp.setStyleSheet("QToolTip { color: #ffffff; background-color: #2a82da; "
+    qapp.setStyleSheet("QToolTip { color: #fffff0; background-color: #2a82da; "
                        "border: 1px solid white; }")
 
 
@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         ## new layer
 
         layer2 = QStandardItem("todo")
-        layer2.setData(QColorConstants.Black, Qt.DecorationRole)
+        layer2.setData(QColorConstants.White, Qt.DecorationRole)
         layer2.setData("layer-2", Qt.ToolTipRole)
         timeline.model().appendRow(layer2)
 
@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    setup_dark_theme(app)
+    # setup_dark_theme(app)
 
     window = MainWindow()
     window.show()
