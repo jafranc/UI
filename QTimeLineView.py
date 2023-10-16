@@ -47,8 +47,11 @@ class QTimeLineView(QAbstractItemView):
             painter.drawLine(0, self.timestempSectionHeight, a0.rect().width(), self.timestempSectionHeight)
 
             painter.setPen(QPen(self.palette().color(QPalette.WindowText), 1))
-            for i in range(int(self.scrollOffset.x() / 100 + 1) * 100, a0.rect().width() + self.scrollOffset.x(), 100):
-                text = '{:2.4g}s'.format(self.pixelsToDuration(i))
+            times =  [ self.model().index(k, self.model().columnCount()-1).data(Qt.UserRole + 1) for k in range(0, self.model().rowCount())]
+            times.extend([ times[k] + self.model().index(k, self.model().columnCount()-1).data(Qt.UserRole + 2) for k in range(0, self.model().rowCount())])
+            for mtime in times:
+                text = '{:2.4g}s'.format(mtime)
+                i = int(self.durationToPixels(mtime))
                 textRect = painter.fontMetrics().boundingRect(text)
                 textRect.setWidth(textRect.width()*2)
 
