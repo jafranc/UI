@@ -46,15 +46,15 @@ class MainWindow(QMainWindow):
         timeline.setScale(1.0)
 
         layer = QStandardItem("tada")
-        layer.setData(QColorConstants.Black, Qt.DecorationRole)
+        layer.setData(QColorConstants.White, Qt.DecorationRole)
         layer.setData("layer", Qt.ToolTipRole)
         timeline.model().appendRow(layer)
 
         section = QStandardItem("SECTION")
         section.setData(QColorConstants.Blue.lighter(100), Qt.DecorationRole)
         section.setData("sec_data", Qt.ToolTipRole)
-        section.setData(12.0, Qt.UserRole + 1)
-        section.setData(122.0, Qt.UserRole + 2)
+        section.setData(1e4, Qt.UserRole + 1)#start
+        section.setData(1.2e4, Qt.UserRole + 2)#duration
 
         timeline.model().setItem(layer.row(), 1, section)
 
@@ -68,8 +68,8 @@ class MainWindow(QMainWindow):
         section = QStandardItem("SECTION-2")
         section.setData(QColorConstants.Blue, Qt.DecorationRole)
         section.setData("sec2_data", Qt.ToolTipRole)
-        section.setData(145.0, Qt.UserRole + 1)
-        section.setData(222.0, Qt.UserRole + 2)
+        section.setData(1.45e5, Qt.UserRole + 1)
+        section.setData(2.22e5, Qt.UserRole + 2)
 
         timeline.model().setItem(layer2.row(), 1, section)
 

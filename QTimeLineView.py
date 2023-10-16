@@ -19,6 +19,7 @@ class QTimeLineView(QAbstractItemView):
         self.timestempSectionHeight: int = 30
         self.timestampPer100Pixels: int = 1.0
         self.layerHeight: int = 20
+        self.originTime: float = 1e32
 
         self.viewport().setAttribute(Qt.WA_Hover)
         self.setItemDelegate(QTimeLineItemDelegate())
@@ -47,11 +48,12 @@ class QTimeLineView(QAbstractItemView):
 
             painter.setPen(QPen(self.palette().color(QPalette.WindowText), 1))
             for i in range(int(self.scrollOffset.x() / 100 + 1) * 100, a0.rect().width() + self.scrollOffset.x(), 100):
-                text = '{}s'.format(self.pixelsToDuration(i))
+                text = '{:2.4g}s'.format(self.pixelsToDuration(i))
                 textRect = painter.fontMetrics().boundingRect(text)
+                textRect.setWidth(textRect.width()*2)
 
                 textRect.translate(-self.scrollOffset.x(), 0)
-                textRect.translate(int(i - textRect.width() / 2), int(self.timestempSectionHeight - 13))
+                textRect.translate(int((i - textRect.width()) / 2), int(self.timestempSectionHeight - 13))
                 if textRect.right() > a0.rect().width() - 5:
                     textRect.translate(a0.rect().width() - textRect.right() - 5, 0)
                 elif textRect.left():
@@ -75,9 +77,7 @@ class QTimeLineView(QAbstractItemView):
                 item = self.model().index(i, 0)
                 bgPenColor = QColor(item.data(Qt.DecorationRole)).darker(200)
                 bgFillColor = QColor(item.data(Qt.DecorationRole)).darker(150)
-                # replace colors
-                # bgPenColor = QColor(QColorConstants.Red)
-                # bgFillColor = QColor(QColorConstants.lue)
+
                 rectWithoutTimeStamps = a0.rect()
                 rectWithoutTimeStamps.setTop(self.timestempSectionHeight)
                 painter.setPen(bgPenColor)
@@ -91,7 +91,6 @@ class QTimeLineView(QAbstractItemView):
                             segment.data(Qt.UserRole + 2) is None):
                         continue
                     option.rect = self.visualRect(segment)
-                    # ???
                     option.state.State_MouseOver = (segment == self.hoverIndex)
 
                     if option.rect.intersects(rectWithoutTimeStamps):
@@ -111,6 +110,16 @@ class QTimeLineView(QAbstractItemView):
         super().resizeEvent(e)
 
     def showEvent(self, a0):
+        if self.model() is None:
+            return
+        max_ = 0
+        for i in range(0, self.model().rowCount()):
+            item = self.model().index(i, self.model().columnCount() - 1)
+            if not item.isValid():
+                continue
+            max_ = max(max_, item.data(Qt.UserRole + 2))
+            self.originTime = min(self.originTime, item.data(Qt.UserRole + 1))
+        self.setScale(1. / max_ * self.viewport().width())
         self.updateScrollBars()
         super().showEvent(a0)
 
