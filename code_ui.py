@@ -1,6 +1,8 @@
 import re
 from functools import partial
 
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QLabel,
@@ -25,6 +27,8 @@ from PyQt5 import QtCore
 import xmlschema
 import xml.etree.ElementTree as ET
 import sys
+
+from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
 
 class PopUpWindows(QDialog):
@@ -208,12 +212,56 @@ class MainWindow(QMainWindow):
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
 
         self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
+        ## testing integration
+        self.timeline = self.addTimeline()
+
+        self.vlayout.addWidget(self.timeline,max_gen-1,1,1,self.vlayout.columnCount()-1)
         container = QWidget()
         container.setLayout(self.vlayout)
         scollable_area = QScrollArea()
         scollable_area.setWidget(container)
         scollable_area.show()
         self.setCentralWidget(scollable_area)
+
+    def addTimeline(self):
+            # by hand
+        timeline = QTimeLineView()
+
+        timeline.setModel(QStandardItemModel(timeline))
+        timeline.model().clear()
+        timeline.setScale(1.0)
+
+        layer = QStandardItem("tada")
+        layer.setData(QColorConstants.White, Qt.DecorationRole)
+        layer.setData("layer", Qt.ToolTipRole)
+        timeline.model().appendRow(layer)
+
+        section = QStandardItem("SECTION")
+        section.setData(QColorConstants.Blue.lighter(100), Qt.DecorationRole)
+        section.setData("sec_data", Qt.ToolTipRole)
+        section.setData(1e4, Qt.UserRole + 1)#start
+        section.setData(1.2e4, Qt.UserRole + 2)#duration
+
+        timeline.model().setItem(layer.row(), 1, section)
+
+        ## new layer
+
+        layer2 = QStandardItem("todo")
+        layer2.setData(QColorConstants.White, Qt.DecorationRole)
+        layer2.setData("layer-2", Qt.ToolTipRole)
+        timeline.model().appendRow(layer2)
+
+        section = QStandardItem("SECTION-2")
+        section.setData(QColorConstants.Blue, Qt.DecorationRole)
+        section.setData("sec2_data", Qt.ToolTipRole)
+        section.setData(1.45e5, Qt.UserRole + 1)
+        section.setData(2.22e5, Qt.UserRole + 2)
+
+        timeline.model().setItem(layer2.row(), 1, section)
+
+        timeline.show()
+
+        return timeline
 
     def update_line(self, elt, k, text):
         elt.attrib[k] = text
