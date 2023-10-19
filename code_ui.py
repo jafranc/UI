@@ -1,8 +1,9 @@
 import re
 from functools import partial
 
+import numpy as np
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants, QColor
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QLabel,
@@ -31,6 +32,7 @@ import sys
 from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
 
+
 class PopUpWindows(QDialog):
     def __init__(self):
         super().__init__()
@@ -57,6 +59,7 @@ class PopUpWindows(QDialog):
 
     def closeEvent(self, event):
         event.accept()
+
 
 class MainWindow(QMainWindow):
 
@@ -91,6 +94,7 @@ class MainWindow(QMainWindow):
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
+        # menu block
         self.file_menu = QMenu("File", self)
         open_action = QAction("Open", self)
         open_action.triggered.connect(self.file_open)
@@ -103,9 +107,11 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(reset_action)
 
         self.menuBar().addMenu(self.file_menu)
-        ##
-        itree = ET.parse(self.fname)
-        self.evaluate_file(itree)
+
+        # input tree block
+        # todo decide if itree should be kept or not
+        self.itree = ET.parse(self.fname)
+        self.evaluate_file(self.itree)
 
     def evaluate_sctree(self):
         self.sc = xmlschema.XMLSchema('schema.xsd')
@@ -115,8 +121,6 @@ class MainWindow(QMainWindow):
         self.sc_tree._setroot(parent)
 
     def evaluate_file(self, itree):
-
-        # self.plus_button = QPushButton("+")
 
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
@@ -128,13 +132,11 @@ class MainWindow(QMainWindow):
         visit_indices = [visit_etree[0].tag + '_0']  # root always unique
         visit_qtitem = [QTreeWidgetItem(self.treewidget)]
         visit_qtitem[0].setText(0, visit_etree[0].tag)
-        # visit_qtitem[0].setText(0,"Test")
-        # seconditem = QTreeWidgetItem(visit_qtitem[0])
-        # seconditem.setText(0,"Subtest")
-        # for child in self.itree.iter():
+
         gen_num = [0]
         col_num = [0]
         max_gen = 0
+
         # todo refactor in BFS with callback
         while len(visit_etree):
             child = visit_etree.pop(0)
@@ -212,10 +214,10 @@ class MainWindow(QMainWindow):
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
 
         self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
-        ## testing integration
-        self.timeline = self.addTimeline()
+        # make use of the qtimelineview widget we baked
+        self.timeline = self.addTimeline(self.itree)
 
-        self.vlayout.addWidget(self.timeline,max_gen-1,1,1,self.vlayout.columnCount()-1)
+        self.vlayout.addWidget(self.timeline, max_gen - 1, 1, 1, self.vlayout.columnCount() - 1)
         container = QWidget()
         container.setLayout(self.vlayout)
         scollable_area = QScrollArea()
@@ -223,41 +225,82 @@ class MainWindow(QMainWindow):
         scollable_area.show()
         self.setCentralWidget(scollable_area)
 
-    def addTimeline(self):
-            # by hand
+    def filterEvent(self, tree: ET.ElementTree):
+
+        # event is a tuple of a starttime, duration followed by string-tag and rgb color for QTimeLineView to picked up
+        event = []
+
+        for events in tree.getroot().findall("Events"):
+            maxTime = float(events.attrib["maxTime"])
+            for children in events:
+                if children.tag == "PeriodicEvent":
+                    periodic = children
+                    if 'timeFrequency' in [key for key, _ in periodic.items()]:
+                        timerange = np.arange(0, maxTime, float(periodic.attrib["timeFrequency"]))
+                        event.extend([(starttime, 1, periodic.attrib["target"], [1, 0, 0]) for starttime in timerange])
+                    elif ('endTime' in [key for key, _ in periodic.items()]) or (
+                            'beginTime' in [key for key, _ in periodic.items()]):
+                        starttime = float(periodic.attrib["beginTime"]) if (
+                                    'beginTime' in [key for key, _ in periodic.items()]) else 0
+                        endtime = float(periodic.attrib["endTime"]) if (
+                                    'endTime' in [key for key, _ in periodic.items()]) else maxTime
+                        duration = endtime - starttime
+                        event.extend([(starttime, duration, periodic.attrib["target"], [1, 0, 0])])
+                #
+                elif children.tag == "SoloEvent":
+                    solo = children
+                    if ('endTime' in [key for key, _ in solo.items()]) or (
+                            'beginTime' in [key for key, _ in solo.items()]):
+                        starttime = float(solo.attrib["beginTime"]) if (
+                                    'beginTime' in [key for key, _ in solo.items()]) else 0
+                        endtime = float(solo.attrib["endTime"]) if (
+                                    'endTime' in [key for key, _ in solo.items()]) else maxTime
+                        duration = endtime - starttime
+                        event.extend([(starttime, duration, solo.attrib["target"], [0, 1, 0])])
+
+        return event
+
+    def addTimeline(self, tree):
+
+        event = self.filterEvent(tree)
+        #todo connect change in value in Event to filter and repaint QTimeLineView
+        #todo connect change in QTimeLineView in change in the Event and xml
+
+        # by hand
         timeline = QTimeLineView()
 
         timeline.setModel(QStandardItemModel(timeline))
         timeline.model().clear()
         timeline.setScale(1.0)
 
-        layer = QStandardItem("tada")
-        layer.setData(QColorConstants.White, Qt.DecorationRole)
-        layer.setData("layer", Qt.ToolTipRole)
-        timeline.model().appendRow(layer)
+        for i, ev in enumerate(event):
+            # 1 layer per event model
+            layer = QStandardItem("event_{}".format(i))
+            layer.setData(QColorConstants.White, Qt.DecorationRole)
+            layer.setData("event_{}".format(i), Qt.ToolTipRole)
+            timeline.model().appendRow(layer)
+            section = QStandardItem("Periodic")
+            section.setData(QColorConstants.Blue.lighter(100), Qt.DecorationRole)
+            section.setData(ev[2], Qt.ToolTipRole)
+            section.setData(ev[0], Qt.UserRole + 1)  # start
+            section.setData(ev[1], Qt.UserRole + 2)  # duration
 
-        section = QStandardItem("SECTION")
-        section.setData(QColorConstants.Blue.lighter(100), Qt.DecorationRole)
-        section.setData("sec_data", Qt.ToolTipRole)
-        section.setData(1e4, Qt.UserRole + 1)#start
-        section.setData(1.2e4, Qt.UserRole + 2)#duration
-
-        timeline.model().setItem(layer.row(), 1, section)
+            timeline.model().setItem(layer.row(), 1, section)
 
         ## new layer
 
-        layer2 = QStandardItem("todo")
-        layer2.setData(QColorConstants.White, Qt.DecorationRole)
-        layer2.setData("layer-2", Qt.ToolTipRole)
-        timeline.model().appendRow(layer2)
-
-        section = QStandardItem("SECTION-2")
-        section.setData(QColorConstants.Blue, Qt.DecorationRole)
-        section.setData("sec2_data", Qt.ToolTipRole)
-        section.setData(1.45e5, Qt.UserRole + 1)
-        section.setData(2.22e5, Qt.UserRole + 2)
-
-        timeline.model().setItem(layer2.row(), 1, section)
+        # layer2 = QStandardItem("todo")
+        # layer2.setData(QColorConstants.White, Qt.DecorationRole)
+        # layer2.setData("layer-2", Qt.ToolTipRole)
+        # timeline.model().appendRow(layer2)
+        #
+        # section = QStandardItem("SECTION-2")
+        # section.setData(QColorConstants.Blue, Qt.DecorationRole)
+        # section.setData("sec2_data", Qt.ToolTipRole)
+        # section.setData(1.45e5, Qt.UserRole + 1)
+        # section.setData(2.22e5, Qt.UserRole + 2)
+        #
+        # timeline.model().setItem(layer2.row(), 1, section)
 
         timeline.show()
 
