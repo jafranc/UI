@@ -1,6 +1,9 @@
 import re
 from functools import partial
 
+import numpy as np
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants, QColor
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QLabel,
@@ -14,46 +17,24 @@ from PyQt5.QtWidgets import (QApplication,
                              QFormLayout,
                              QFrame,
                              QFileDialog,
-                             QPushButton,
                              QComboBox,
                              QCheckBox,
                              QTreeWidgetItem,
-                             QTreeWidget, QGridLayout, QAbstractItemView, QMessageBox, QDialog, QListWidget,
+                             QTreeWidget, QGridLayout, QAbstractItemView, QDialog, QListWidget,
                              QDialogButtonBox)
 
 from PyQt5 import QtCore
 import xmlschema
 import xml.etree.ElementTree as ET
 import sys
+
+from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
-
-
-def iter_indent(elt: ET.Element):
-    for child in elt:
-        child.text += '\t'
-        iter_indent(child)
-        child.tail += '\t'
-    elt.text += '\t'
-
-
-def indent(tree: ET.ElementTree):
-    # init indent
-    for elt in tree.iter():
-        elt.text = '\n'
-        elt.tail = '\n\n'
-
-    # dfs indent
-    iter_indent(tree.getroot())
-
-    # correct level0
-    for elt in tree.getroot():
-        elt.tail = elt.tail[:-1]
 
 
 class PopUpWindows(QDialog):
     def __init__(self):
         super().__init__()
-
 
         self.list_widget = QListWidget()
         self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -70,13 +51,30 @@ class PopUpWindows(QDialog):
         self.setLayout(self.layout)
 
     def setFields(self, field_list):
-        [ self.list_widget.addItem(field) for field in field_list ]
+        [self.list_widget.addItem(field) for field in field_list]
 
     def selected(self):
-            return [item.text() for item in self.list_widget.selectedItems()]
+        return [item.text() for item in self.list_widget.selectedItems()]
 
     def closeEvent(self, event):
         event.accept()
+
+
+class TimeLineWindows(QWidget):
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.label = QLabel("Timeline Window")
+        layout.addWidget(self.label)
+        self.setLayout(layout)
+
+    def setOnCloseCallback(self, callback):
+        self.onCloseCallback = callback
+
+    def closeEvent(self, a0):
+        super().closeEvent(a0)
+        self.onCloseCallback()
 
 
 class MainWindow(QMainWindow):
@@ -112,6 +110,7 @@ class MainWindow(QMainWindow):
         self.qc_time_list = ['sec', 'hours', 'days', 'years']
         self.qc_time_combos = {}
 
+        # menu block
         self.file_menu = QMenu("File", self)
         open_action = QAction("Open", self)
         open_action.triggered.connect(self.file_open)
@@ -124,9 +123,11 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(reset_action)
 
         self.menuBar().addMenu(self.file_menu)
-        ##
-        itree = ET.parse(self.fname)
-        self.evaluate_file(itree)
+
+        # input tree block
+        # todo decide if itree should be kept or not
+        self.itree = ET.parse(self.fname)
+        self.evaluate_tree(self.itree)
 
     def evaluate_sctree(self):
         self.sc = xmlschema.XMLSchema('schema.xsd')
@@ -135,9 +136,7 @@ class MainWindow(QMainWindow):
         parent = self.dict_to_etree(self.sc.to_dict(self.fname), parent)
         self.sc_tree._setroot(parent)
 
-    def evaluate_file(self, itree):
-
-        # self.plus_button = QPushButton("+")
+    def evaluate_tree(self, itree):
 
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
@@ -149,13 +148,11 @@ class MainWindow(QMainWindow):
         visit_indices = [visit_etree[0].tag + '_0']  # root always unique
         visit_qtitem = [QTreeWidgetItem(self.treewidget)]
         visit_qtitem[0].setText(0, visit_etree[0].tag)
-        # visit_qtitem[0].setText(0,"Test")
-        # seconditem = QTreeWidgetItem(visit_qtitem[0])
-        # seconditem.setText(0,"Subtest")
-        # for child in self.itree.iter():
+
         gen_num = [0]
         col_num = [0]
         max_gen = 0
+
         # todo refactor in BFS with callback
         while len(visit_etree):
             child = visit_etree.pop(0)
@@ -180,13 +177,18 @@ class MainWindow(QMainWindow):
             frame = QFrame()
 
             frame.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
-            frame_action_red = QAction("Reduce",frame)
-            frame_action_red.triggered.connect(partial(self.reduction,child, frame))
+            frame_action_red = QAction("Reduce", frame)
+            frame_action_red.triggered.connect(partial(self.reduction, child, frame))
             frame.addAction(frame_action_red)
-            frame_action_aug = QAction("Augmente",frame)
-            frame_action_aug.triggered.connect(partial(self.augmentation,child, frame))
+            frame_action_aug = QAction("Augmente", frame)
+            frame_action_aug.triggered.connect(partial(self.augmentation, child, frame))
             frame.addAction(frame_action_aug)
 
+            # add TimeLine via context menu
+            if child.tag == "Events":
+                frame_action_tl = QAction("Generate TimeLine", frame)
+                frame_action_tl.triggered.connect(partial(self.timelinePopUp, child, frame))
+                frame.addAction(frame_action_tl)
 
             h = self.append_in_dict(child, frame)
 
@@ -205,13 +207,13 @@ class MainWindow(QMainWindow):
                 if re.match(r'logLevel', k):
                     qc = QComboBox()
                     qc.addItems([str(i) for i in range(0, 8)])
-                    qc.currentIndexChanged.connect(partial(self.update_combo,child, k))
+                    qc.currentIndexChanged.connect(partial(self.update_combo, child, k))
                     layout.addRow(k, qc)
                 elif re.match(r'(max|begin|end)Time$', k) or re.match(r'(force|initial)Dt', k) \
                         or re.match(r'timeFrequency', k):
                     ql = QHBoxLayout()
                     qe = QLineEdit(v)
-                    qe.textChanged.connect(partial(self.update_line,child, k))
+                    qe.textChanged.connect(partial(self.update_line, child, k))
                     ql.addWidget(qe)
                     qc = QComboBox()
                     qc.addItems(self.qc_time_list)
@@ -222,25 +224,107 @@ class MainWindow(QMainWindow):
                 elif re.match(r'useMass|directParallel|targetExactTimestep', k):
                     qcb = QCheckBox()
                     qcb.setChecked(bool(int(v)))
-                    qcb.stateChanged.connect(partial(self.update_bool,child, k))
+                    qcb.stateChanged.connect(partial(self.update_bool, child, k))
                     layout.addRow(k, qcb)
                 else:
                     qe = QLineEdit(v)
-                    qe.textChanged.connect(partial(self.update_line,child, k))
+                    qe.textChanged.connect(partial(self.update_line, child, k))
                     layout.addRow(k, qe)
-
 
             frame.setLayout(layout)
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
 
-        self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
+        # self.vlayout.addWidget(self.treewidget, -1, 0, max_gen - 1, 1)
+        # make use of the qtimelineview widget we baked
+        # self.timeline = self.addTimeline(self.itree)
+
+        self.vlayout.addWidget(self.timeline, max_gen - 1, 1, 1, self.vlayout.columnCount() - 1)
         container = QWidget()
         container.setLayout(self.vlayout)
         scollable_area = QScrollArea()
         scollable_area.setWidget(container)
         scollable_area.show()
         self.setCentralWidget(scollable_area)
+
+    def filterEvent(self, tree: ET.ElementTree):
+
+        # event is a tuple of a starttime, duration followed by string-tag and rgb color for QTimeLineView to picked up
+        event = []
+
+        for events in tree.getroot().findall("Events"):
+            maxTime = float(events.attrib["maxTime"])
+            for children in events:
+                if children.tag == "PeriodicEvent":
+                    periodic = children
+                    if 'timeFrequency' in [key for key, _ in periodic.items()]:
+                        timerange = np.arange(0, maxTime, float(periodic.attrib["timeFrequency"]))
+                        event.extend([(starttime, 1, periodic.attrib["name"], [1, 0, 0]) for starttime in timerange])
+                    elif ('endTime' in [key for key, _ in periodic.items()]) or (
+                            'beginTime' in [key for key, _ in periodic.items()]):
+                        starttime = float(periodic.attrib["beginTime"]) if (
+                                'beginTime' in [key for key, _ in periodic.items()]) else 0
+                        endtime = float(periodic.attrib["endTime"]) if (
+                                'endTime' in [key for key, _ in periodic.items()]) else maxTime
+                        duration = endtime - starttime
+                        event.extend([(starttime, duration, periodic.attrib["name"], [1, 0, 0])])
+                #
+                elif children.tag == "SoloEvent":
+                    solo = children
+                    if ('endTime' in [key for key, _ in solo.items()]) or (
+                            'beginTime' in [key for key, _ in solo.items()]):
+                        starttime = float(solo.attrib["beginTime"]) if (
+                                'beginTime' in [key for key, _ in solo.items()]) else 0
+                        endtime = float(solo.attrib["endTime"]) if (
+                                'endTime' in [key for key, _ in solo.items()]) else maxTime
+                        duration = endtime - starttime
+                        event.extend([(starttime, duration, solo.attrib["name"], [0, 1, 0])])
+
+        return event
+
+    def addTimeline(self, tree):
+
+        event = self.filterEvent(tree)
+
+        # by hand
+        timeline = QTimeLineView()
+
+        timeline.setModel(QStandardItemModel(timeline))
+        timeline.model().clear()
+        timeline.setScale(1.0)
+
+        for i, ev in enumerate(event):
+            # 1 layer per event model
+            layer = QStandardItem("event_{}".format(i))
+            layer.setData(QColorConstants.White, Qt.DecorationRole)
+            layer.setData("event_{}".format(i), Qt.ToolTipRole)
+            timeline.model().appendRow(layer)
+            section = QStandardItem("Periodic")
+            section.setData(QColorConstants.Blue.lighter(100), Qt.DecorationRole)
+            section.setData(ev[2], Qt.ToolTipRole)
+            section.setData(ev[0], Qt.UserRole + 1)  # start
+            section.setData(ev[1], Qt.UserRole + 2)  # duration
+
+            timeline.model().setItem(layer.row(), 1, section)
+
+        ## new layer
+
+        # layer2 = QStandardItem("todo")
+        # layer2.setData(QColorConstants.White, Qt.DecorationRole)
+        # layer2.setData("layer-2", Qt.ToolTipRole)
+        # timeline.model().appendRow(layer2)
+        #
+        # section = QStandardItem("SECTION-2")
+        # section.setData(QColorConstants.Blue, Qt.DecorationRole)
+        # section.setData("sec2_data", Qt.ToolTipRole)
+        # section.setData(1.45e5, Qt.UserRole + 1)
+        # section.setData(2.22e5, Qt.UserRole + 2)
+        #
+        # timeline.model().setItem(layer2.row(), 1, section)
+
+        timeline.show()
+
+        return timeline
 
     def update_line(self, elt, k, text):
         elt.attrib[k] = text
@@ -249,20 +333,20 @@ class MainWindow(QMainWindow):
         elt.attrib[k] = str(value)
 
     def update_bool(self, elt, k, state):
-        #No tri state
-        elt.attrib[k] = "0" if state==0 else "1"
+        # No tri state
+        elt.attrib[k] = "0" if state == 0 else "1"
 
-#todo check if can get parent widget otherwise
+    # todo check if can get parent widget otherwise
     def reduction(self, etree_elt, widget):
 
         rm_list = []
-        sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
+        sctree_elt = self.sc_tree.find('.//' + etree_elt.tag)
         for k, v in sctree_elt.attrib.items():
             if k in etree_elt.attrib and v == etree_elt.attrib[k]:
                 rm_list.append(k)
-                #delete rows with that label in widget
+                # delete rows with that label in widget
                 layout = widget.layout()
-                for irow in reversed(range(1,layout.rowCount())):
+                for irow in reversed(range(1, layout.rowCount())):
                     if layout.itemAt(irow, QFormLayout.LabelRole).widget().text() == k:
                         layout.removeRow(irow)
 
@@ -273,10 +357,10 @@ class MainWindow(QMainWindow):
         pop_list = []
         msg_box = PopUpWindows()
         msg_box.setWindowTitle('Attribute to add')
-        sctree_elt = self.sc_tree.find('.//'+etree_elt.tag)
+        sctree_elt = self.sc_tree.find('.//' + etree_elt.tag)
         for k, v in sctree_elt.attrib.items():
             if k not in etree_elt.attrib:
-                #delete rows with that label in widget
+                # delete rows with that label in widget
                 pop_list.append(k)
 
         msg_box.setFields(pop_list)
@@ -286,9 +370,37 @@ class MainWindow(QMainWindow):
         layout = widget.layout()
         sc_list = sctree_elt.attrib
         for k in add_list:
-            layout.addRow(k, QLineEdit(sc_list[k]) )
+            layout.addRow(k, QLineEdit(sc_list[k]))
             etree_elt.set(k, sc_list[k])
 
+    def timelinePopUp(self, etree_elt, widget):
+        self.timelineBox = TimeLineWindows()
+        self.timelineBox.setWindowTitle("Timeline for Events")
+        timeline = self.addTimeline(self.itree)
+
+        def updateWidget(widget: QFrame, timeline: QTimeLineView, elt: ET.ElementTree):
+            if timeline.model() is None:
+                return
+            for i in range(1, timeline.model().rowCount()):
+                item = timeline.model().index(i, timeline.model().columnCount() - 1)
+                if not item.isValid():
+                    continue
+                #data extraction
+                name = item.data(Qt.ToolTipRole)
+                beginTime = item.data(Qt.UserRole + 1) #start time
+                endTime = beginTime + item.data(Qt.UserRole + 2)
+                for children in elt:
+                    if ((name in [values for _,values in children.items()]) and
+                            ( ('beginTime' in [k for k,_ in children.items()]) or 'endTime' in [k for k,_ in children.items()])):
+                        children.attrib['beginTime'] = "{:.4e}".format(beginTime)
+                        children.attrib['endTime'] = "{:.4e}".format(endTime)
+            self.evaluate_tree(self.itree)
+
+
+        self.timelineBox.setOnCloseCallback(partial(updateWidget, widget, timeline, etree_elt))
+
+        self.timelineBox.layout().addWidget(timeline)
+        self.timelineBox.show()
 
     def avoid_duplicates(self, etree_list):
         tag_list = [elt.tag for elt in etree_list]
@@ -303,9 +415,6 @@ class MainWindow(QMainWindow):
 
         uniq.extend(dup)
         return uniq
-
-    def foo(self):
-        print('$%%%%%%%%$$$%%%%% FOO')
 
     def append_in_dict(self, child, frame, c=0):
         h = hash(child.tag + '_' + str(c))
@@ -333,13 +442,13 @@ class MainWindow(QMainWindow):
 
     def dict_to_etree(self, mdict: dict, parent):
 
-        for k,v in mdict.items():
-            if isinstance(v,list):
+        for k, v in mdict.items():
+            if isinstance(v, list):
                 elt = ET.Element(k)
-                #sub
-                parent.append( self.dict_to_etree(v[0],elt) )
+                # sub
+                parent.append(self.dict_to_etree(v[0], elt))
             else:
-                parent.set(k[1:],v)
+                parent.set(k[1:], v)
 
         return parent
 
@@ -351,11 +460,9 @@ class MainWindow(QMainWindow):
         for h in self.showlist:
             self.qwidgetlist[h].hide()
         self.showlist = []
-
         self.showlist = [h for item in self.treewidget.selectedItems() for h, v in self.qtreeitemlist.items() if
                          v == item]
         # self.appendAllChildren(self.showlist)
-
         for h in self.showlist:
             self.qwidgetlist[h].show()
 
@@ -377,12 +484,12 @@ class MainWindow(QMainWindow):
         self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
         self.clean_widgets()
         itree = ET.parse(self.fname)
-        self.evaluate_file(itree)
+        self.evaluate_tree(itree)
         self.evaluate_sctree()
 
     def reset_to_default(self):
         self.clean_widgets()
-        self.evaluate_file(self.sc_tree)
+        self.evaluate_tree(self.sc_tree)
         self.evaluate_sctree()
 
     def DFS(self, qr, parent):
@@ -414,7 +521,6 @@ class MainWindow(QMainWindow):
         otree = ET.ElementTree()
         otree._setroot(problem)
 
-        indent(otree)
         otree.write(fname, xml_declaration="xml version=\"1.0\"")
 
     def qform_to_etree(self, qframe):
