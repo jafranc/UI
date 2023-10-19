@@ -59,6 +59,7 @@ class PopUpWindows(QDialog):
     def closeEvent(self, event):
         event.accept()
 
+
 class TimeLineWindows(QWidget):
 
     def __init__(self):
@@ -67,6 +68,14 @@ class TimeLineWindows(QWidget):
         self.label = QLabel("Timeline Window")
         layout.addWidget(self.label)
         self.setLayout(layout)
+
+    def setOnCloseCallback(self, callback):
+        self.onCloseCallback = callback
+
+    def closeEvent(self, a0):
+        super().closeEvent(a0)
+        self.onCloseCallback()
+
 
 class MainWindow(QMainWindow):
 
@@ -118,7 +127,7 @@ class MainWindow(QMainWindow):
         # input tree block
         # todo decide if itree should be kept or not
         self.itree = ET.parse(self.fname)
-        self.evaluate_file(self.itree)
+        self.evaluate_tree(self.itree)
 
     def evaluate_sctree(self):
         self.sc = xmlschema.XMLSchema('schema.xsd')
@@ -127,7 +136,7 @@ class MainWindow(QMainWindow):
         parent = self.dict_to_etree(self.sc.to_dict(self.fname), parent)
         self.sc_tree._setroot(parent)
 
-    def evaluate_file(self, itree):
+    def evaluate_tree(self, itree):
 
         self.vlayout = QGridLayout()
         self.treewidget = QTreeWidget()
@@ -175,10 +184,10 @@ class MainWindow(QMainWindow):
             frame_action_aug.triggered.connect(partial(self.augmentation, child, frame))
             frame.addAction(frame_action_aug)
 
-            #add TimeLine via context menu
+            # add TimeLine via context menu
             if child.tag == "Events":
                 frame_action_tl = QAction("Generate TimeLine", frame)
-                frame_action_tl.triggered.connect(partial(self.timelinePopUp,child,frame))
+                frame_action_tl.triggered.connect(partial(self.timelinePopUp, child, frame))
                 frame.addAction(frame_action_tl)
 
             h = self.append_in_dict(child, frame)
@@ -226,9 +235,9 @@ class MainWindow(QMainWindow):
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
 
-        self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
+        # self.vlayout.addWidget(self.treewidget, -1, 0, max_gen - 1, 1)
         # make use of the qtimelineview widget we baked
-        self.timeline = self.addTimeline(self.itree)
+        # self.timeline = self.addTimeline(self.itree)
 
         self.vlayout.addWidget(self.timeline, max_gen - 1, 1, 1, self.vlayout.columnCount() - 1)
         container = QWidget()
@@ -250,34 +259,32 @@ class MainWindow(QMainWindow):
                     periodic = children
                     if 'timeFrequency' in [key for key, _ in periodic.items()]:
                         timerange = np.arange(0, maxTime, float(periodic.attrib["timeFrequency"]))
-                        event.extend([(starttime, 1, periodic.attrib["target"], [1, 0, 0]) for starttime in timerange])
+                        event.extend([(starttime, 1, periodic.attrib["name"], [1, 0, 0]) for starttime in timerange])
                     elif ('endTime' in [key for key, _ in periodic.items()]) or (
                             'beginTime' in [key for key, _ in periodic.items()]):
                         starttime = float(periodic.attrib["beginTime"]) if (
-                                    'beginTime' in [key for key, _ in periodic.items()]) else 0
+                                'beginTime' in [key for key, _ in periodic.items()]) else 0
                         endtime = float(periodic.attrib["endTime"]) if (
-                                    'endTime' in [key for key, _ in periodic.items()]) else maxTime
+                                'endTime' in [key for key, _ in periodic.items()]) else maxTime
                         duration = endtime - starttime
-                        event.extend([(starttime, duration, periodic.attrib["target"], [1, 0, 0])])
+                        event.extend([(starttime, duration, periodic.attrib["name"], [1, 0, 0])])
                 #
                 elif children.tag == "SoloEvent":
                     solo = children
                     if ('endTime' in [key for key, _ in solo.items()]) or (
                             'beginTime' in [key for key, _ in solo.items()]):
                         starttime = float(solo.attrib["beginTime"]) if (
-                                    'beginTime' in [key for key, _ in solo.items()]) else 0
+                                'beginTime' in [key for key, _ in solo.items()]) else 0
                         endtime = float(solo.attrib["endTime"]) if (
-                                    'endTime' in [key for key, _ in solo.items()]) else maxTime
+                                'endTime' in [key for key, _ in solo.items()]) else maxTime
                         duration = endtime - starttime
-                        event.extend([(starttime, duration, solo.attrib["target"], [0, 1, 0])])
+                        event.extend([(starttime, duration, solo.attrib["name"], [0, 1, 0])])
 
         return event
 
     def addTimeline(self, tree):
 
         event = self.filterEvent(tree)
-        #todo connect change in value in Event to filter and repaint QTimeLineView
-        #todo connect change in QTimeLineView in change in the Event and xml
 
         # by hand
         timeline = QTimeLineView()
@@ -371,6 +378,27 @@ class MainWindow(QMainWindow):
         self.timelineBox.setWindowTitle("Timeline for Events")
         timeline = self.addTimeline(self.itree)
 
+        def updateWidget(widget: QFrame, timeline: QTimeLineView, elt: ET.ElementTree):
+            if timeline.model() is None:
+                return
+            for i in range(1, timeline.model().rowCount()):
+                item = timeline.model().index(i, timeline.model().columnCount() - 1)
+                if not item.isValid():
+                    continue
+                #data extraction
+                name = item.data(Qt.ToolTipRole)
+                beginTime = item.data(Qt.UserRole + 1) #start time
+                endTime = beginTime + item.data(Qt.UserRole + 2)
+                for children in elt:
+                    if ((name in [values for _,values in children.items()]) and
+                            ( ('beginTime' in [k for k,_ in children.items()]) or 'endTime' in [k for k,_ in children.items()])):
+                        children.attrib['beginTime'] = "{:.4e}".format(beginTime)
+                        children.attrib['endTime'] = "{:.4e}".format(endTime)
+            self.evaluate_tree(self.itree)
+
+
+        self.timelineBox.setOnCloseCallback(partial(updateWidget, widget, timeline, etree_elt))
+
         self.timelineBox.layout().addWidget(timeline)
         self.timelineBox.show()
 
@@ -456,12 +484,12 @@ class MainWindow(QMainWindow):
         self.fname, _ = QFileDialog.getOpenFileName(self, 'Open File')
         self.clean_widgets()
         itree = ET.parse(self.fname)
-        self.evaluate_file(itree)
+        self.evaluate_tree(itree)
         self.evaluate_sctree()
 
     def reset_to_default(self):
         self.clean_widgets()
-        self.evaluate_file(self.sc_tree)
+        self.evaluate_tree(self.sc_tree)
         self.evaluate_sctree()
 
     def DFS(self, qr, parent):
