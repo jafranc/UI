@@ -27,3 +27,10 @@ Eventually it offers conversion from hours, days, year to seconds via combo sele
 Once happy with the file, `File > Save as ...` is saving formatted xml using GEOS python tool.
 
 ![screencast_howto](./docs/howto/screencast_GEOS_UI.gif)
+
+
+## Timeline view for Event (New)
+
+A dynamic timeline view of _Events_ can be obtained through context menu. It display Gantt chart
+like events which can be moved forward or backward of 100 sec by left or right clicking on them.
+A middle click will half the duration of the event.
