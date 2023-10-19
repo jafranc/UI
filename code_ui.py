@@ -17,11 +17,10 @@ from PyQt5.QtWidgets import (QApplication,
                              QFormLayout,
                              QFrame,
                              QFileDialog,
-                             QPushButton,
                              QComboBox,
                              QCheckBox,
                              QTreeWidgetItem,
-                             QTreeWidget, QGridLayout, QAbstractItemView, QMessageBox, QDialog, QListWidget,
+                             QTreeWidget, QGridLayout, QAbstractItemView, QDialog, QListWidget,
                              QDialogButtonBox)
 
 from PyQt5 import QtCore
@@ -60,6 +59,14 @@ class PopUpWindows(QDialog):
     def closeEvent(self, event):
         event.accept()
 
+class TimeLineWindows(QWidget):
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.label = QLabel("Timeline Window")
+        layout.addWidget(self.label)
+        self.setLayout(layout)
 
 class MainWindow(QMainWindow):
 
@@ -167,6 +174,12 @@ class MainWindow(QMainWindow):
             frame_action_aug = QAction("Augmente", frame)
             frame_action_aug.triggered.connect(partial(self.augmentation, child, frame))
             frame.addAction(frame_action_aug)
+
+            #add TimeLine via context menu
+            if child.tag == "Events":
+                frame_action_tl = QAction("Generate TimeLine", frame)
+                frame_action_tl.triggered.connect(partial(self.timelinePopUp,child,frame))
+                frame.addAction(frame_action_tl)
 
             h = self.append_in_dict(child, frame)
 
@@ -352,6 +365,14 @@ class MainWindow(QMainWindow):
         for k in add_list:
             layout.addRow(k, QLineEdit(sc_list[k]))
             etree_elt.set(k, sc_list[k])
+
+    def timelinePopUp(self, etree_elt, widget):
+        self.timelineBox = TimeLineWindows()
+        self.timelineBox.setWindowTitle("Timeline for Events")
+        timeline = self.addTimeline(self.itree)
+
+        self.timelineBox.layout().addWidget(timeline)
+        self.timelineBox.show()
 
     def avoid_duplicates(self, etree_list):
         tag_list = [elt.tag for elt in etree_list]
