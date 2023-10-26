@@ -2,6 +2,7 @@ import re
 from functools import partial
 
 import numpy as np
+import vtk
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants, QColor
 from PyQt5.QtWidgets import (QApplication,
@@ -31,6 +32,7 @@ import sys
 from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
 
+from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 class PopUpWindows(QDialog):
     def __init__(self):
@@ -58,6 +60,52 @@ class PopUpWindows(QDialog):
 
     def closeEvent(self, event):
         event.accept()
+
+class VTKPopUpWindows(QWidget):
+
+    def __init__(self, elt : ET.ElementTree):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.label = QLabel("VTK test windows")
+        layout.addWidget(self.label)
+        self.fname = elt.get('file')
+        self.setLayout(layout)
+        self._setVTKenv_()
+
+    def _setVTKenv_(self):
+
+        self.vtkWidget = QVTKRenderWindowInteractor(self)
+        self.layout().addWidget(self.vtkWidget)
+
+        self.ren = vtk.vtkRenderer()
+        self.vtkWidget.GetRenderWindow().AddRenderer(self.ren)
+        self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
+
+        # Create source
+        reader = vtk.vtkXMLUnstructuredGridReader()
+        reader.SetFileName(self.fname)
+        reader.Update()
+
+        # source = vtk.vtkSphereSource()
+        # source.SetCenter(0, 0, 0)
+        # source.SetRadius(5.0)
+
+        # Create a mapper
+        mapper = vtk.vtkDataSetMapper()
+        mapper.SetInputData(reader.GetOutput())
+
+        # Create an actor
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetEdgeVisibility(True)
+
+        self.ren.AddActor(actor)
+
+        self.ren.ResetCamera()
+
+        self.show()
+        self.iren.Initialize()
+
 
 
 class TimeLineWindows(QWidget):
@@ -100,7 +148,7 @@ class MainWindow(QMainWindow):
         self.qtreeitemlist = {}
         self.tagHashMap = {}
         self.setWindowTitle("GEOS standard UI")
-        self.fname = 'test.xml'
+        self.fname = 'test-vtk.xml'
 
         self.evaluate_sctree()
 
@@ -189,6 +237,10 @@ class MainWindow(QMainWindow):
                 frame_action_tl = QAction("Generate TimeLine", frame)
                 frame_action_tl.triggered.connect(partial(self.timelinePopUp, child, frame))
                 frame.addAction(frame_action_tl)
+            if child.tag == "VTKMesh":
+                frame_action_vtk = QAction("Genrate VTK mesh view", frame)
+                frame_action_vtk.triggered.connect(partial(self.vtkPopUp,child,frame))
+                frame.addAction(frame_action_vtk)
 
             h = self.append_in_dict(child, frame)
 
@@ -235,11 +287,10 @@ class MainWindow(QMainWindow):
 
             max_gen = self.test_if_widget_present(col, frame, gen, max_gen)
 
-        # self.vlayout.addWidget(self.treewidget, -1, 0, max_gen - 1, 1)
+        self.vlayout.addWidget(self.treewidget, 0, 0, max_gen - 1, 1)
         # make use of the qtimelineview widget we baked
         # self.timeline = self.addTimeline(self.itree)
-
-        self.vlayout.addWidget(self.timeline, max_gen - 1, 1, 1, self.vlayout.columnCount() - 1)
+        # self.vlayout.addWidget(self.timeline, max_gen - 1, 1, 1, self.vlayout.columnCount() - 1)
         container = QWidget()
         container.setLayout(self.vlayout)
         scollable_area = QScrollArea()
@@ -372,6 +423,9 @@ class MainWindow(QMainWindow):
         for k in add_list:
             layout.addRow(k, QLineEdit(sc_list[k]))
             etree_elt.set(k, sc_list[k])
+
+    def vtkPopUp(self, etree_elt, widget):
+        self.vtkWidget = VTKPopUpWindows(etree_elt)
 
     def timelinePopUp(self, etree_elt, widget):
         self.timelineBox = TimeLineWindows()
