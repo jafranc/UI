@@ -3,6 +3,9 @@ from functools import partial
 
 import numpy as np
 import vtk
+from vtkmodules.util import numpy_support
+from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants, QColor
 from PyQt5.QtWidgets import (QApplication,
@@ -22,7 +25,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QCheckBox,
                              QTreeWidgetItem,
                              QTreeWidget, QGridLayout, QAbstractItemView, QDialog, QListWidget,
-                             QDialogButtonBox)
+                             QDialogButtonBox, QPushButton)
 
 from PyQt5 import QtCore
 import xmlschema
@@ -32,7 +35,6 @@ import sys
 from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
 
-from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 class PopUpWindows(QDialog):
     def __init__(self):
@@ -61,21 +63,31 @@ class PopUpWindows(QDialog):
     def closeEvent(self, event):
         event.accept()
 
+
 class VTKPopUpWindows(QWidget):
 
-    def __init__(self, elt : ET.ElementTree):
+    def __init__(self, elt: ET.ElementTree):
         super().__init__()
-        layout = QVBoxLayout()
-        self.label = QLabel("VTK test windows")
-        layout.addWidget(self.label)
+        layout = QGridLayout()
+        FieldCombo = QComboBox()
+        FieldCombo.setLineEdit(QLineEdit('Field@0'))
+        layout.addWidget(FieldCombo, 0, 0, 1, 2)
+        CmpCombo = QComboBox()
+        CmpCombo.setLabel(QLineEdit('Comp@0'))
+        layout.addWidget(CmpCombo, 0, 2, 1, 1)
+        SnapshotBt = QPushButton()
+        layout.addWidget(SnapshotBt, 0, 3, 1, 1)
+
         self.fname = elt.get('file')
+        self.elt = elt  # tmp
         self.setLayout(layout)
+        self.meshfields = {}
         self._setVTKenv_()
 
     def _setVTKenv_(self):
 
         self.vtkWidget = QVTKRenderWindowInteractor(self)
-        self.layout().addWidget(self.vtkWidget)
+        self.layout().addWidget(self.vtkWidget,1,0,4,4)
 
         self.ren = vtk.vtkRenderer()
         self.vtkWidget.GetRenderWindow().AddRenderer(self.ren)
@@ -90,22 +102,62 @@ class VTKPopUpWindows(QWidget):
         # source.SetCenter(0, 0, 0)
         # source.SetRadius(5.0)
 
+        self._loadFields_(self.elt, reader.GetOutput())
+
+        # lut
+        lut = vtk.vtkLookupTable()
+        lut.SetNumberOfColors(256)
+        lut.SetHueRange(0.667, 0.)
+        lut.Build()
+        # lut.SetTableValue(0,1,0,0)
+        # lut.SetTableValue(1,0.5,0.5,0)
+        # lut.SetTableValue(2,0,1,0)
+
         # Create a mapper
         mapper = vtk.vtkDataSetMapper()
         mapper.SetInputData(reader.GetOutput())
+        mapper.SetLookupTable(lut)
+        mapper.SetColorModeToMapScalars()
+        mapper.ScalarVisibilityOn()
+        mapper.SetScalarModeToUseCellFieldData()
+        mapper.SelectColorArray(self.meshfields['PERM'])
+        mapper.ColorByArrayComponent(self.meshfields['PERM'], 0)
+        r = reader.GetOutput().GetCellData().GetArray(self.meshfields['PERM']).GetRange()
+        mapper.SetScalarRange(r[0], r[1])
+        # mapper.SetInputArrayToProcess(1, 0, mapper.GetInputConnection(0,0), vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS,"PORO")
+        # mapper = vtk.vtkPolyDataMapper()
+        # mapper.SetInputData(reader.GetOutput().GetCellData())
+        # mapper.SetInputData(reader.GetOutput().GetCellData().GetArray(self.meshfields['PORO']))
 
         # Create an actor
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
         actor.GetProperty().SetEdgeVisibility(True)
 
+        # Info text
+        txtActor = vtk.vtkTextActor()
+        arr = numpy_support.vtk_to_numpy(
+            reader.GetOutput().GetCellData().GetArray(self.meshfields['PERM']))
+        txtActor.SetInput("Range [{:.5e}:{:.5e}] \n".format(r[0], r[1])
+                          + "Avg {:.5e} \n".format(np.mean(arr))
+                          + "Std {:.5e} \n".format(np.std(arr)))
+        txtActor.SetPosition2(20, 20)
+        txtActor.GetTextProperty().SetFontSize(16)
+        txtActor.GetTextProperty().SetColor(vtk.vtkNamedColors().GetColor3d("Gold"))
+
         self.ren.AddActor(actor)
+        self.ren.AddActor(txtActor)
 
         self.ren.ResetCamera()
 
         self.show()
         self.iren.Initialize()
 
+    def _loadFields_(self, elt: ET.ElementTree, mesh: vtk.vtkUnstructuredGrid) -> vtk.vtkCellData:
+        if elt.get('fieldsToImport'):
+            self.names = elt.get('fieldsToImport')
+            for i in range(mesh.GetCellData().GetNumberOfArrays()):
+                self.meshfields[mesh.GetCellData().GetArray(i).GetName()] = i
 
 
 class TimeLineWindows(QWidget):
@@ -239,7 +291,7 @@ class MainWindow(QMainWindow):
                 frame.addAction(frame_action_tl)
             if child.tag == "VTKMesh":
                 frame_action_vtk = QAction("Genrate VTK mesh view", frame)
-                frame_action_vtk.triggered.connect(partial(self.vtkPopUp,child,frame))
+                frame_action_vtk.triggered.connect(partial(self.vtkPopUp, child, frame))
                 frame.addAction(frame_action_vtk)
 
             h = self.append_in_dict(child, frame)
@@ -439,17 +491,17 @@ class MainWindow(QMainWindow):
                 item = timeline.model().index(i, timeline.model().columnCount() - 1)
                 if not item.isValid():
                     continue
-                #data extraction
+                # data extraction
                 name = item.data(Qt.ToolTipRole)
-                beginTime = item.data(Qt.UserRole + 1) #start time
+                beginTime = item.data(Qt.UserRole + 1)  # start time
                 endTime = beginTime + item.data(Qt.UserRole + 2)
                 for children in elt:
-                    if ((name in [values for _,values in children.items()]) and
-                            ( ('beginTime' in [k for k,_ in children.items()]) or 'endTime' in [k for k,_ in children.items()])):
+                    if ((name in [values for _, values in children.items()]) and
+                            (('beginTime' in [k for k, _ in children.items()]) or 'endTime' in [k for k, _ in
+                                                                                                children.items()])):
                         children.attrib['beginTime'] = "{:.4e}".format(beginTime)
                         children.attrib['endTime'] = "{:.4e}".format(endTime)
             self.evaluate_tree(self.itree)
-
 
         self.timelineBox.setOnCloseCallback(partial(updateWidget, widget, timeline, etree_elt))
 
