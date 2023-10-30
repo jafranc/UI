@@ -1,6 +1,7 @@
 import re
 from functools import partial
 
+from dateutils import date
 import numpy as np
 import vtk
 from vtkmodules.util import numpy_support
@@ -68,26 +69,57 @@ class VTKPopUpWindows(QWidget):
 
     def __init__(self, elt: ET.ElementTree):
         super().__init__()
+        self.txtActor = None
+        self.actor = None
         layout = QGridLayout()
-        FieldCombo = QComboBox()
-        FieldCombo.setLineEdit(QLineEdit('Field@0'))
-        layout.addWidget(FieldCombo, 0, 0, 1, 2)
-        CmpCombo = QComboBox()
-        CmpCombo.setLabel(QLineEdit('Comp@0'))
-        layout.addWidget(CmpCombo, 0, 2, 1, 1)
-        SnapshotBt = QPushButton()
-        layout.addWidget(SnapshotBt, 0, 3, 1, 1)
+        self.mesh = None
 
+        # main widget
         self.fname = elt.get('file')
         self.elt = elt  # tmp
         self.setLayout(layout)
         self.meshfields = {}
-        self._setVTKenv_()
+        self._setVTKenv_(0, 0)
 
-    def _setVTKenv_(self):
+        # menu-action widget
+        fieldCombo = QComboBox()
+        cmpCombo = QComboBox()
+        for field, num_field in self.meshfields.items():
+            fieldCombo.addItem(field)
+        fieldCombo.currentIndexChanged.connect(partial(self.update_cmp_combo, layout))
+        layout.addWidget(fieldCombo, 0, 0, 1, 2)
+
+        snapshotBt = QPushButton("Snapshot")
+        snapshotBt.clicked.connect(partial(self.on_snapButtonClicked, self.vtkWidget.GetRenderWindow()))
+        layout.addWidget(snapshotBt, 0, 3, 1, 1)
+
+    def update_cmp_combo(self, layout, ix_field: int):
+        currentField = self.mesh.GetCellData().GetArray(ix_field)
+        if currentField.GetNumberOfComponents() > 1:
+            coupled_combo = QComboBox()
+            coupled_combo.addItems([str(i) for i in range(currentField.GetNumberOfComponents())])
+            coupled_combo.currentIndexChanged.connect(partial(self.update_cmp_component, ix_field))
+            layout.addWidget(coupled_combo, 0, 2, 1, 1)
+        else:
+            self.renderField(ix_field,0)
+
+    def update_cmp_component(self, field_index: int, ix_compo: int):
+        self.renderField(field_index, ix_compo)
+
+    def on_snapButtonClicked(self, ren: vtk.vtkRenderWindow):
+        win_to_img = vtk.vtkWindowToImageFilter()
+        win_to_img.SetInput(ren)
+        win_to_img.SetScale(1)
+        win_to_img.SetInputBufferTypeToRGB()
+        writer = vtk.vtkPNGWriter()
+        writer.SetFileName('Snap_' + str(date.today()) + '.png')
+        writer.SetInputConnection(win_to_img.GetOutputPort())
+        writer.Write()
+
+    def _setVTKenv_(self, field_index, component):
 
         self.vtkWidget = QVTKRenderWindowInteractor(self)
-        self.layout().addWidget(self.vtkWidget,1,0,4,4)
+        self.layout().addWidget(self.vtkWidget, 1, 0, 4, 4)
 
         self.ren = vtk.vtkRenderer()
         self.vtkWidget.GetRenderWindow().AddRenderer(self.ren)
@@ -102,7 +134,8 @@ class VTKPopUpWindows(QWidget):
         # source.SetCenter(0, 0, 0)
         # source.SetRadius(5.0)
 
-        self._loadFields_(self.elt, reader.GetOutput())
+        self.mesh = reader.GetOutput()
+        self._loadFields_(self.elt, self.mesh)
 
         # lut
         lut = vtk.vtkLookupTable()
@@ -114,44 +147,51 @@ class VTKPopUpWindows(QWidget):
         # lut.SetTableValue(2,0,1,0)
 
         # Create a mapper
-        mapper = vtk.vtkDataSetMapper()
-        mapper.SetInputData(reader.GetOutput())
-        mapper.SetLookupTable(lut)
-        mapper.SetColorModeToMapScalars()
-        mapper.ScalarVisibilityOn()
-        mapper.SetScalarModeToUseCellFieldData()
-        mapper.SelectColorArray(self.meshfields['PERM'])
-        mapper.ColorByArrayComponent(self.meshfields['PERM'], 0)
-        r = reader.GetOutput().GetCellData().GetArray(self.meshfields['PERM']).GetRange()
-        mapper.SetScalarRange(r[0], r[1])
-        # mapper.SetInputArrayToProcess(1, 0, mapper.GetInputConnection(0,0), vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS,"PORO")
-        # mapper = vtk.vtkPolyDataMapper()
-        # mapper.SetInputData(reader.GetOutput().GetCellData())
-        # mapper.SetInputData(reader.GetOutput().GetCellData().GetArray(self.meshfields['PORO']))
+        self.mapper = vtk.vtkDataSetMapper()
+        self.mapper.SetInputData(self.mesh)
+        self.mapper.SetLookupTable(lut)
+        self.mapper.SetColorModeToMapScalars()
+        self.mapper.ScalarVisibilityOn()
+        self.mapper.SetScalarModeToUseCellFieldData()
 
         # Create an actor
-        actor = vtk.vtkActor()
-        actor.SetMapper(mapper)
-        actor.GetProperty().SetEdgeVisibility(True)
+        self.actor = vtk.vtkActor()
+        self.actor.SetMapper(self.mapper)
+        self.actor.GetProperty().SetEdgeVisibility(True)
 
-        # Info text
-        txtActor = vtk.vtkTextActor()
-        arr = numpy_support.vtk_to_numpy(
-            reader.GetOutput().GetCellData().GetArray(self.meshfields['PERM']))
-        txtActor.SetInput("Range [{:.5e}:{:.5e}] \n".format(r[0], r[1])
-                          + "Avg {:.5e} \n".format(np.mean(arr))
-                          + "Std {:.5e} \n".format(np.std(arr)))
-        txtActor.SetPosition2(20, 20)
-        txtActor.GetTextProperty().SetFontSize(16)
-        txtActor.GetTextProperty().SetColor(vtk.vtkNamedColors().GetColor3d("Gold"))
+        self.txtActor = vtk.vtkTextActor()
 
-        self.ren.AddActor(actor)
-        self.ren.AddActor(txtActor)
+        self.renderField(field_index, component)
+
+        self.ren.AddActor(self.actor)
+        self.ren.AddActor(self.txtActor)
 
         self.ren.ResetCamera()
 
         self.show()
         self.iren.Initialize()
+
+    def renderField(self, field_index: int, compo: int):
+        self.mapper.SelectColorArray(field_index)
+        self.mapper.ColorByArrayComponent(field_index, compo)
+        r = self.mesh.GetCellData().GetArray(field_index).GetRange()
+        self.mapper.SetScalarRange(r[0], r[1])
+
+        # Info text
+        arr = numpy_support.vtk_to_numpy(
+            self.mesh.GetCellData().GetArray(field_index))
+
+        if self.mesh.GetCellData().GetArray(field_index).GetNumberOfComponents() > 1:
+            arr = arr[compo, :]
+
+        self.txtActor.SetInput("Range [{:.5e}:{:.5e}] \n".format(r[0], r[1])
+                               + "Avg {:.5e} \n".format(np.mean(arr))
+                               + "Std {:.5e} \n".format(np.std(arr)))
+        self.txtActor.SetPosition2(20, 20)
+        self.txtActor.GetTextProperty().SetFontSize(16)
+        self.txtActor.GetTextProperty().SetColor(vtk.vtkNamedColors().GetColor3d("Gold"))
+
+        self.show()
 
     def _loadFields_(self, elt: ET.ElementTree, mesh: vtk.vtkUnstructuredGrid) -> vtk.vtkCellData:
         if elt.get('fieldsToImport'):
