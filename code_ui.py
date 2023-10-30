@@ -33,6 +33,8 @@ import xmlschema
 import xml.etree.ElementTree as ET
 import sys
 
+from external.geosx_mesh_doctor.checks import element_volumes
+
 from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
 
@@ -69,6 +71,12 @@ class VTKPopUpWindows(QWidget):
 
     def __init__(self, elt: ET.ElementTree):
         super().__init__()
+        self.extractedActor = None
+        self.extractedMapper = None
+        self.extracted_mesh = None
+        self.notExtractedMapper = None
+        self.notExtracted_mesh = None
+        self.notExtractedActor = None
         self.txtActor = None
         self.actor = None
         layout = QGridLayout()
@@ -83,7 +91,6 @@ class VTKPopUpWindows(QWidget):
 
         # menu-action widget
         fieldCombo = QComboBox()
-        cmpCombo = QComboBox()
         for field, num_field in self.meshfields.items():
             fieldCombo.addItem(field)
         fieldCombo.currentIndexChanged.connect(partial(self.update_cmp_combo, layout))
@@ -91,7 +98,87 @@ class VTKPopUpWindows(QWidget):
 
         snapshotBt = QPushButton("Snapshot")
         snapshotBt.clicked.connect(partial(self.on_snapButtonClicked, self.vtkWidget.GetRenderWindow()))
-        layout.addWidget(snapshotBt, 0, 3, 1, 1)
+        layout.addWidget(snapshotBt, 0, 4, 1, 1)
+
+        # coupling mesh doctor
+        frame_ext = QFrame()
+        frame_ext.setFrameStyle(QFrame.Panel | QFrame.Plain)
+        inner_layout = QFormLayout()
+        frame_ext.setLayout(inner_layout)
+        inner_layout.addRow(QLabel('<meshDoctor>'))
+        hbox_layout = QHBoxLayout()
+        tol_edit = QLineEdit()
+        tol_edit.setText('0')
+        hbox_layout.addWidget(tol_edit)
+        check_box = QCheckBox()
+        check_box.stateChanged.connect(partial(self.on_volChecked, tol_edit))
+        hbox_layout.addWidget(check_box)
+        inner_layout.addRow(QLabel('volume check'), hbox_layout)
+        layout.addWidget(frame_ext, 0, 3, 1, 1)
+
+    def on_volChecked(self, tol_edit: QLineEdit, state: bool):
+        if state == Qt.CheckState.Checked:  # fix to
+            tol = float(tol_edit.text())
+            res = element_volumes.check(self.fname, element_volumes.Options(tol))
+            # debug
+            for i in range(100):
+                res.element_volumes.extend([(111 + i, 100), (233 + i, 200)])
+
+            if len(res.element_volumes) == 0:
+                return
+            else:
+                self.ren.RemoveActor(self.actor)
+
+            ids = vtk.vtkIdTypeArray()
+            ids.SetNumberOfComponents(1)
+            for val in res.element_volumes:
+                ids.InsertNextValue(val[0])
+
+            selectionNode = vtk.vtkSelectionNode()
+            selectionNode.SetFieldType(vtk.vtkSelectionNode.CELL)
+            selectionNode.SetContentType(vtk.vtkSelectionNode.INDICES)
+            selectionNode.SetSelectionList(ids)
+            selection = vtk.vtkSelection()
+            selection.AddNode(selectionNode)
+            extracted = vtk.vtkExtractSelection()
+            extracted.SetInputConnection(0, self.reader.GetOutputPort())
+            extracted.SetInputData(1, selection)
+            extracted.Update()
+            self.extracted_mesh = extracted.GetOutput()
+            print("There are {} cells under {} m3 vol".format(self.mesh.GetNumberOfCells(), tol))
+            self.extractedMapper = vtk.vtkDataSetMapper()
+            self.extractedMapper.SetInputData(self.extracted_mesh)
+            self.extractedActor = vtk.vtkActor()
+            self.extractedActor.SetMapper(self.extractedMapper)
+            self.extractedActor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d('MistyRose'))
+            # self.extractedActor.SetBackfaceProperty(vtk.vtkProperty().SetColor(vtk.vtkNamedColors().GetColor3d('Gold')))
+            self.ren.AddActor(self.extractedActor)
+
+            # complementary
+            self.notExtractedMapper = vtk.vtkDataSetMapper()
+            notSelectionNode = vtk.vtkSelectionNode()
+            notSelectionNode.DeepCopy(selectionNode)
+            notSelectionNode.GetProperties().Set(vtk.vtkSelectionNode.INVERSE(),1)
+            notSelection = vtk.vtkSelection()
+            notSelection.AddNode(notSelectionNode)
+            notExtracted = vtk.vtkExtractSelection()
+            notExtracted.SetInputConnection(0, self.reader.GetOutputPort())
+            notExtracted.SetInputData(1, notSelection)
+            notExtracted.Update()
+            self.notExtracted_mesh = notExtracted.GetOutput()
+            self.notExtractedMapper.SetInputData(self.notExtracted_mesh)
+            #transpose color by arra
+            self.notExtractedMapper.SelectColorArray(self.mapper.GetArrayId())
+            self.notExtractedMapper.ColorByArrayComponent(self.mapper.GetArrayId(), self.mapper.GetArrayComponent())
+            r = self.notExtracted_mesh.GetCellData().GetArray(self.mapper.GetArrayId()).GetRange()
+            self.notExtractedMapper.SetScalarRange(r[0], r[1])
+
+            self.notExtractedActor = vtk.vtkActor()
+            self.notExtractedActor.SetMapper(self.notExtractedMapper)
+            self.notExtractedActor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d('Blue'))
+            self.ren.AddActor(self.notExtractedActor)
+
+            self.show()
 
     def update_cmp_combo(self, layout, ix_field: int):
         currentField = self.mesh.GetCellData().GetArray(ix_field)
@@ -101,7 +188,7 @@ class VTKPopUpWindows(QWidget):
             coupled_combo.currentIndexChanged.connect(partial(self.update_cmp_component, ix_field))
             layout.addWidget(coupled_combo, 0, 2, 1, 1)
         else:
-            self.renderField(ix_field,0)
+            self.renderField(ix_field, 0)
 
     def update_cmp_component(self, field_index: int, ix_compo: int):
         self.renderField(field_index, ix_compo)
@@ -119,22 +206,22 @@ class VTKPopUpWindows(QWidget):
     def _setVTKenv_(self, field_index, component):
 
         self.vtkWidget = QVTKRenderWindowInteractor(self)
-        self.layout().addWidget(self.vtkWidget, 1, 0, 4, 4)
+        self.layout().addWidget(self.vtkWidget, 1, 0, 5, 5)
 
         self.ren = vtk.vtkRenderer()
         self.vtkWidget.GetRenderWindow().AddRenderer(self.ren)
         self.iren = self.vtkWidget.GetRenderWindow().GetInteractor()
 
         # Create source
-        reader = vtk.vtkXMLUnstructuredGridReader()
-        reader.SetFileName(self.fname)
-        reader.Update()
+        self.reader = vtk.vtkXMLUnstructuredGridReader()
+        self.reader.SetFileName(self.fname)
+        self.reader.Update()
 
         # source = vtk.vtkSphereSource()
         # source.SetCenter(0, 0, 0)
         # source.SetRadius(5.0)
 
-        self.mesh = reader.GetOutput()
+        self.mesh = self.reader.GetOutput()
         self._loadFields_(self.elt, self.mesh)
 
         # lut
