@@ -71,6 +71,7 @@ class VTKPopUpWindows(QWidget):
 
     def __init__(self, elt: ET.ElementTree):
         super().__init__()
+        self.meshDoctor_textActor = None
         self.extractedActor = None
         self.extractedMapper = None
         self.extracted_mesh = None
@@ -151,7 +152,7 @@ class VTKPopUpWindows(QWidget):
             self.extractedActor = vtk.vtkActor()
             self.extractedActor.SetMapper(self.extractedMapper)
             self.extractedActor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d('MistyRose'))
-            # self.extractedActor.SetBackfaceProperty(vtk.vtkProperty().SetColor(vtk.vtkNamedColors().GetColor3d('Gold')))
+            self.extractedActor.SetBackfaceProperty(vtk.vtkProperty().SetColor(vtk.vtkNamedColors().GetColor3d('Gold')))
             self.ren.AddActor(self.extractedActor)
 
             # complementary
@@ -167,7 +168,11 @@ class VTKPopUpWindows(QWidget):
             notExtracted.Update()
             self.notExtracted_mesh = notExtracted.GetOutput()
             self.notExtractedMapper.SetInputData(self.notExtracted_mesh)
-            #transpose color by arra
+            #transpose color by array
+            self.notExtractedMapper.SetLookupTable(self.lut)
+            self.notExtractedMapper.SetColorModeToMapScalars()
+            self.notExtractedMapper.ScalarVisibilityOn()
+            self.notExtractedMapper.SetScalarModeToUseCellFieldData()
             self.notExtractedMapper.SelectColorArray(self.mapper.GetArrayId())
             self.notExtractedMapper.ColorByArrayComponent(self.mapper.GetArrayId(), self.mapper.GetArrayComponent())
             r = self.notExtracted_mesh.GetCellData().GetArray(self.mapper.GetArrayId()).GetRange()
@@ -175,8 +180,18 @@ class VTKPopUpWindows(QWidget):
 
             self.notExtractedActor = vtk.vtkActor()
             self.notExtractedActor.SetMapper(self.notExtractedMapper)
-            self.notExtractedActor.GetProperty().SetColor(vtk.vtkNamedColors().GetColor3d('Blue'))
             self.ren.AddActor(self.notExtractedActor)
+            
+
+            #textActor
+            self.ren.RemoveActor(self.meshDoctor_textActor)
+            self.meshDoctor_textActor = vtk.vtkTextActor()
+            self.meshDoctor_textActor.SetInput("MeshDoctor:\n V(cells)<{} m3 : {}\n".format(tol,self.extracted_mesh.GetNumberOfCells()))
+            self.meshDoctor_textActor.SetPosition(self.iren.GetSize()[0]-30,self.iren.GetSize()[1]-30)
+            self.meshDoctor_textActor.GetTextProperty().SetFontSize(16)
+            self.meshDoctor_textActor.GetTextProperty().SetColor(vtk.vtkNamedColors().GetColor3d("Red"))
+            
+            self.ren.AddActor(self.meshDoctor_textActor)
 
             self.show()
 
@@ -225,10 +240,10 @@ class VTKPopUpWindows(QWidget):
         self._loadFields_(self.elt, self.mesh)
 
         # lut
-        lut = vtk.vtkLookupTable()
-        lut.SetNumberOfColors(256)
-        lut.SetHueRange(0.667, 0.)
-        lut.Build()
+        self.lut = vtk.vtkLookupTable()
+        self.lut.SetNumberOfColors(256)
+        self.lut.SetHueRange(0.667, 0.)
+        self.lut.Build()
         # lut.SetTableValue(0,1,0,0)
         # lut.SetTableValue(1,0.5,0.5,0)
         # lut.SetTableValue(2,0,1,0)
@@ -236,7 +251,7 @@ class VTKPopUpWindows(QWidget):
         # Create a mapper
         self.mapper = vtk.vtkDataSetMapper()
         self.mapper.SetInputData(self.mesh)
-        self.mapper.SetLookupTable(lut)
+        self.mapper.SetLookupTable(self.lut)
         self.mapper.SetColorModeToMapScalars()
         self.mapper.ScalarVisibilityOn()
         self.mapper.SetScalarModeToUseCellFieldData()
