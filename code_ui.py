@@ -121,9 +121,6 @@ class VTKPopUpWindows(QWidget):
         if state == Qt.CheckState.Checked:  # fix to
             tol = float(tol_edit.text())
             res = element_volumes.check(self.fname, element_volumes.Options(tol))
-            # debug
-            for i in range(100):
-                res.element_volumes.extend([(111 + i, 100), (233 + i, 200)])
 
             if len(res.element_volumes) == 0:
                 return
@@ -156,38 +153,39 @@ class VTKPopUpWindows(QWidget):
             self.ren.AddActor(self.extractedActor)
 
             # complementary
-            self.notExtractedMapper = vtk.vtkDataSetMapper()
-            notSelectionNode = vtk.vtkSelectionNode()
-            notSelectionNode.DeepCopy(selectionNode)
-            notSelectionNode.GetProperties().Set(vtk.vtkSelectionNode.INVERSE(),1)
-            notSelection = vtk.vtkSelection()
-            notSelection.AddNode(notSelectionNode)
-            notExtracted = vtk.vtkExtractSelection()
-            notExtracted.SetInputConnection(0, self.reader.GetOutputPort())
-            notExtracted.SetInputData(1, notSelection)
-            notExtracted.Update()
-            self.notExtracted_mesh = notExtracted.GetOutput()
-            self.notExtractedMapper.SetInputData(self.notExtracted_mesh)
-            #transpose color by array
-            self.notExtractedMapper.SetLookupTable(self.lut)
-            self.notExtractedMapper.SetColorModeToMapScalars()
-            self.notExtractedMapper.ScalarVisibilityOn()
-            self.notExtractedMapper.SetScalarModeToUseCellFieldData()
-            self.notExtractedMapper.SelectColorArray(self.mapper.GetArrayId())
-            self.notExtractedMapper.ColorByArrayComponent(self.mapper.GetArrayId(), self.mapper.GetArrayComponent())
-            r = self.notExtracted_mesh.GetCellData().GetArray(self.mapper.GetArrayId()).GetRange()
-            self.notExtractedMapper.SetScalarRange(r[0], r[1])
+            if self.extracted_mesh.GetNumberOfCells() < self.mesh.GetNumberOfCells():
+                self.notExtractedMapper = vtk.vtkDataSetMapper()
+                notSelectionNode = vtk.vtkSelectionNode()
+                notSelectionNode.DeepCopy(selectionNode)
+                notSelectionNode.GetProperties().Set(vtk.vtkSelectionNode.INVERSE(),1)
+                notSelection = vtk.vtkSelection()
+                notSelection.AddNode(notSelectionNode)
+                notExtracted = vtk.vtkExtractSelection()
+                notExtracted.SetInputConnection(0, self.reader.GetOutputPort())
+                notExtracted.SetInputData(1, notSelection)
+                notExtracted.Update()
+                self.notExtracted_mesh = notExtracted.GetOutput()
+                self.notExtractedMapper.SetInputData(self.notExtracted_mesh)
+                #transpose color by array
+                self.notExtractedMapper.SetLookupTable(self.lut)
+                self.notExtractedMapper.SetColorModeToMapScalars()
+                self.notExtractedMapper.ScalarVisibilityOn()
+                self.notExtractedMapper.SetScalarModeToUseCellFieldData()
+                self.notExtractedMapper.SelectColorArray(self.mapper.GetArrayId())
+                self.notExtractedMapper.ColorByArrayComponent(self.mapper.GetArrayId(), self.mapper.GetArrayComponent())
+                r = self.notExtracted_mesh.GetCellData().GetArray(self.mapper.GetArrayId()).GetRange()
+                self.notExtractedMapper.SetScalarRange(r[0], r[1])
 
-            self.notExtractedActor = vtk.vtkActor()
-            self.notExtractedActor.SetMapper(self.notExtractedMapper)
-            self.ren.AddActor(self.notExtractedActor)
+                self.notExtractedActor = vtk.vtkActor()
+                self.notExtractedActor.SetMapper(self.notExtractedMapper)
+                self.ren.AddActor(self.notExtractedActor)
             
 
             #textActor
             self.ren.RemoveActor(self.meshDoctor_textActor)
             self.meshDoctor_textActor = vtk.vtkTextActor()
-            self.meshDoctor_textActor.SetInput("MeshDoctor:\n V(cells)<{} m3 : {}\n".format(tol,self.extracted_mesh.GetNumberOfCells()))
-            self.meshDoctor_textActor.SetPosition(self.iren.GetSize()[0]-30,self.iren.GetSize()[1]-30)
+            self.meshDoctor_textActor.SetInput("MeshDoctor:\n V(cells)<{} m3 : {}/{}\n".format(tol,self.extracted_mesh.GetNumberOfCells(),self.mesh.GetNumberOfCells()))
+            self.meshDoctor_textActor.SetPosition2(20,20)
             self.meshDoctor_textActor.GetTextProperty().SetFontSize(16)
             self.meshDoctor_textActor.GetTextProperty().SetColor(vtk.vtkNamedColors().GetColor3d("Red"))
             
