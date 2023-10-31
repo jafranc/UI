@@ -71,7 +71,7 @@ def __check(mesh, options: Options) -> Result:
     small_volumes: List[Tuple[int, float]] = []
     for i, pack in enumerate(zip(volume, quality)):
         v, q = pack
-        vol = q if mesh.GetCellType(i) in SUPPORTED_TYPES else v
+        vol = v if mesh.GetCellType(i) in SUPPORTED_TYPES else v
         if vol < options.min_volume:
             small_volumes.append((i, vol))
     return Result(element_volumes=small_volumes)
