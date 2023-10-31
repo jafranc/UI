@@ -7,8 +7,9 @@ import vtk
 from vtkmodules.util import numpy_support
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
+from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants, QColor
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColorConstants
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QLabel,
@@ -28,7 +29,11 @@ from PyQt5.QtWidgets import (QApplication,
                              QTreeWidget, QGridLayout, QAbstractItemView, QDialog, QListWidget,
                              QDialogButtonBox, QPushButton)
 
-from PyQt5 import QtCore
+from PySide2.QtCore import QPointF
+from PySide2.QtGui import QPainter
+import PySide2.QtWidgets as qsw
+from PySide2.QtCharts import QtCharts
+
 import xmlschema
 import xml.etree.ElementTree as ET
 import sys
@@ -37,6 +42,7 @@ from external.geosx_mesh_doctor.checks import element_volumes
 
 from QTimeLineView import QTimeLineView
 from xml_formatter import format_file
+
 
 
 class PopUpWindows(QDialog):
@@ -317,6 +323,43 @@ class TimeLineWindows(QWidget):
         self.onCloseCallback()
 
 
+class PyPlotWindows(QtCharts.QChartView):
+    def __init__(self):
+        super().__init__()
+        self.series = QtCharts.QLineSeries()
+        self.chart = QtCharts.QChart()
+        self.chart.legend().hide()
+
+
+    def set_name(self, elt : ET.ElementTree):
+        self.chart.setTitle(elt.get('name'))
+    def gen_series(self, elt : ET.ElementTree):
+
+        if ('coordinates' in [ key for key,_ in elt.items()]) and ('values' in [key for key,_ in elt.items()]):
+            coord = np.asarray(re.findall(r'\d+.\d+',elt.get('coordinates')[1:-1]),dtype=float)
+            val = np.asarray(re.findall(r'\d+.\d+',elt.get('values')[1:-1]),dtype=float)
+        elif ('coordinateFiles' in [ key for key,_ in elt.items()]) and ('voxelFile' in [key for key,_ in elt.items()]):
+            coordFile = elt.get('coordinateFiles')[1:-1].split(',')
+            if len(coordFile)>1:
+                raise NotImplementedError('SurfacePlot to come')
+            else:
+                coord = np.loadtxt(coordFile[0].strip())
+                val = np.loadtxt(elt.get('voxelFile').strip())
+
+        for i in range(len(val)):
+            self.series.append(coord[i],val[i])
+
+    def process_node(self, elt:ET.ElementTree):
+        self.set_name(elt)
+        self.gen_series(elt)
+        self.chart.addSeries(self.series)
+        self.chart.createDefaultAxes()
+
+        self.setChart(self.chart)
+        self.setRenderHint(QPainter.Antialiasing)
+        self.show()
+
+
 class MainWindow(QMainWindow):
 
     def on_currentIndexChanged(self, k, qe: QLineEdit, ix):
@@ -433,6 +476,10 @@ class MainWindow(QMainWindow):
                 frame_action_vtk = QAction("Genrate VTK mesh view", frame)
                 frame_action_vtk.triggered.connect(partial(self.vtkPopUp, child, frame))
                 frame.addAction(frame_action_vtk)
+            if child.tag == "TableFunction":
+                frame_action_plot = QAction("Generate plot view",frame)
+                frame_action_plot.triggered.connect(partial(self.chartPopUp,child,frame))
+                frame.addAction(frame_action_plot)
 
             h = self.append_in_dict(child, frame)
 
@@ -618,6 +665,11 @@ class MainWindow(QMainWindow):
 
     def vtkPopUp(self, etree_elt, widget):
         self.vtkWidget = VTKPopUpWindows(etree_elt)
+
+    def chartPopUp(self, etree_elt, widget):
+        self.chartWidget = PyPlotWindows()
+        self.chartWidget.setWindowTitle("Test for plot")
+        self.chartWidget.process_node(etree_elt)
 
     def timelinePopUp(self, etree_elt, widget):
         self.timelineBox = TimeLineWindows()
