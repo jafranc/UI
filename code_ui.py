@@ -184,6 +184,7 @@ class VTKPopUpWindows(QWidget):
 
                 self.notExtractedActor = vtk.vtkActor()
                 self.notExtractedActor.SetMapper(self.notExtractedMapper)
+                self.notExtractedActor.GetProperty().SetEdgeVisibility(True)
                 self.ren.AddActor(self.notExtractedActor)
             
 
@@ -191,7 +192,7 @@ class VTKPopUpWindows(QWidget):
             self.ren.RemoveActor(self.meshDoctor_textActor)
             self.meshDoctor_textActor = vtk.vtkTextActor()
             self.meshDoctor_textActor.SetInput("MeshDoctor:\n V(cells)<{} m3 : {}/{}\n".format(tol,self.extracted_mesh.GetNumberOfCells(),self.mesh.GetNumberOfCells()))
-            self.meshDoctor_textActor.SetPosition2(20,20)
+            self.meshDoctor_textActor.SetPosition(20,self.ren.GetSize()[1] - 100)
             self.meshDoctor_textActor.GetTextProperty().SetFontSize(16)
             self.meshDoctor_textActor.GetTextProperty().SetColor(vtk.vtkNamedColors().GetColor3d("Red"))
             
