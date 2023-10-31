@@ -166,7 +166,6 @@ class QTimeLineView(QAbstractItemView):
             self.update(QModelIndex(self.hoverIndex))
             self.hoverIndex = self.indexAt(e.pos())
             mult = 0
-            offset = 100
             alpha = 1.
             if e.button() == Qt.LeftButton:
                 mult = 1
@@ -175,6 +174,7 @@ class QTimeLineView(QAbstractItemView):
             elif e.button() == Qt.MiddleButton:
                 alpha = .5
             if self.hoverIndex.isValid():
+                offset = .1*self.hoverIndex.data(Qt.UserRole + 2)
                 val = self.hoverIndex.data(Qt.UserRole + 1)
                 self.hoverIndex.model().setData(self.hoverIndex, val + mult * offset, Qt.UserRole + 1)
                 val = self.hoverIndex.data(Qt.UserRole + 2)
